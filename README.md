@@ -15,6 +15,7 @@ ___
 - Economía
 - Scoreboard para cada juego
 - Música
+- Muy mucho si muy
 
 | Juegos | Disponibilidad |
 | --- | --- |
