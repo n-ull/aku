@@ -1,15 +1,9 @@
 import random
 import discord
-from threading import Timer
 from enum import Enum
-from typing import Any, List, Optional, TypeVar, Union
+from typing import TypeVar
 from dataclasses import dataclass
 from discord.components import SelectOption
-from discord.emoji import Emoji
-
-from discord.interactions import Interaction
-from discord.partial_emoji import PartialEmoji
-from discord.utils import MISSING
 
 CardType = TypeVar('CardType', bound='Card')
 
