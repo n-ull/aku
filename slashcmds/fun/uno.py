@@ -1,10 +1,12 @@
 import discord
 from games.uno.game import Main
-from discord import app_commands, Interaction
+from discord import app_commands
+from discord.app_commands import Choice
 
 @app_commands.command()
-async def uno(ctx: Interaction):
-    """Juega UNO y pierde tus amigos."""
+@app_commands.guild_only()
+async def uno(ctx: discord.Interaction):
+    """Lose all your friends."""
     main = Main(ctx=ctx)
     await main.start()
 
