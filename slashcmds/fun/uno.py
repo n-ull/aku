@@ -1,7 +1,6 @@
 import discord
 from games.uno.game import Main
 from discord import app_commands
-from discord.app_commands import Choice
 
 @app_commands.command()
 @app_commands.guild_only()
