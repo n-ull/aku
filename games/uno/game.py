@@ -1,13 +1,36 @@
 import random
-from threading import Timer
-from typing import Optional
 import discord
-from discord.interactions import Interaction
+from threading import Timer
+from enum import Enum
+from typing import TypeVar
+from dataclasses import dataclass
+
+CardType = TypeVar('CardType', bound='Card')
+
+@dataclass
+class GameConfig:
+    owner: discord.Member
+    stackable: bool = True
+    effect_win: bool = True
+    turn_time: float = 180
+    min_players: int = 1
+    max_players: int = 8
+
+
+class GameState(Enum):
+    WAITING = 1
+    PLAYING = 2
+    FINISHED = 3
+    CANCELLED = 4
+
 
 class Card:
     def __init__(self, color: str, value: str) -> None:
         self.color: str = color
         self.value: str = value
+
+    def validate(self, card: CardType):
+        return self.color == card.color or self.value == card.value or self.is_wild
 
     @property
     def is_wild(self):
@@ -16,14 +39,38 @@ class Card:
     @property
     def has_effect(self):
         effects: dict = {
-            "SKIP": True,
             "+2": True,
+            "SKIP": True,
             "REVERSE": True
         }
         return effects.get(self.value, False)
     
+    @property
+    def color_code(self) -> int:
+        colors: dict = {
+            "R": 0xff5555,
+			"Y": 0xffaa00,
+			"G": 0x55aa55,
+			"B": 0x5555ff
+        }
+        return colors.get(self.color, 0x080808)
+    
+    @property
+    def image_url(self) -> str:
+        return f"https://raw.githubusercontent.com/Ratismal/UNO/master/cards/{self.color}{self.value}.png"
+
+    @property
+    def name(self) -> str:
+        color_name: dict = {
+            "R": "Red",
+            "B": "Blue",
+            "Y": "Yellow",
+            "G": "Green"
+        }
+        return f"{color_name.get(self.color,'Wild')} {self.value}"
+
     def __str__(self) -> str:
-        return f"{self.color} {self.value}"
+        return f"{self.color}{self.value}"
 
 class CardCollection:
     def __init__(self):
@@ -69,29 +116,24 @@ class Player:
         self.hand = Hand()
         self.warns = 0
 
-class GameDataConfigBase:
-    def __init__(self, owner: discord.Member) -> None:
-        self.owner = owner
-        
 class BaseGame:
-    def __init__(self, data: GameDataConfigBase) -> None:
+    def __init__(self, data: GameConfig) -> None:
         self.players: list[Player] = [Player(data.owner)]
         self.currentIndex: int = 0
         self.is_clockwise: bool = True
-        self.game_data_config: GameDataConfigBase = data
-        self.status: str = "Waiting"
-        self.timer: Timer | None = None
+        self.game_data_config: GameConfig = data
+        self.status: GameState = GameState.WAITING
 
     def add_player(self, user: discord.Member):
         # check if can add
-        if self.status == "Started": return self.log("Game already started.")
-        if user.id in [p.id for p in self.players]: return self.log("Player already in the list.")
+        if self.status == GameState.PLAYING: return print("Game already started...")
+        if user.id in [p.id for p in self.players]: return print("Player already in the list.")
 
         self.players.append(Player(user))
         return f"{user.display_name} joined the game succesfully."
 
     def del_player(self, player: Player):
-        if player not in self.players: return self.log("Player is not in the list.")
+        if player not in self.players: return print("Game already started...")
         self.players.remove(player)
     
     def start_game(self): ...
@@ -103,35 +145,27 @@ class BaseGame:
     @property
     def player_list(self) -> str:
         list = ""
-        for player in self.players:
-            list += player.name
+        if self.status == GameState.WAITING:
+            for player in self.players:
+                list += f"- {player.name}\n"
+        else:
+            for player in self.players:
+                if player is self.players[self.currentIndex]:
+                    list += f"▶ {player.name} ({len(player.hand.cards)} {'cartas' if len(player.hand.cards) > 1 else 'carta'})\n"
+                else:
+                    list += f"- {player.name} ({len(player.hand.cards)} {'cartas' if len(player.hand.cards) > 1 else 'carta'})\n"
         return list
 
-class GameDataConfig(GameDataConfigBase):
-    def __init__(self, owner: discord.Member, config: dict | None = {
-        "stackable": True,
-        "effect_win": True,
-        "min_players": 1,
-        "max_players": 8,
-        "turn_time": 180 # in seconds
-    }) -> None:
-        super().__init__(owner)
-        self.stackable: bool = config["stackable"]
-        self.effect_win: bool = config["effect_win"]
-        self.min_players: int = config["min_players"]
-        self.max_players: int = config["max_players"]
-        self.turn_time: float = config["turn_time"]
-        # self.thread = thread
-
 class UNOGame(BaseGame):
-    def __init__(self, data: GameDataConfig) -> None:
+    def __init__(self, data: GameConfig) -> None:
         super().__init__(data)
         self.deck: Deck = Deck()
         self.graveyard: Deck = Deck()
+        self.last_action: str = "Game started with: "
         # self.thread: discord.Thread = data.thread
 
     def start_game(self):
-        if self.status != "Waiting": return self.log("Game already started.")
+        if self.status != GameState.WAITING: return print("Game already started...")
 
         self.deck.generate_deck()
         random.shuffle(self.deck.cards)
@@ -143,7 +177,7 @@ class UNOGame(BaseGame):
         
         self.graveyard.add_card(self.deck.pop_card())
 
-        self.status = "Started"
+        self.status = GameState.PLAYING
 
     """
     Changes the current_index value, can't be higher than the length of the players list.
@@ -162,6 +196,14 @@ class UNOGame(BaseGame):
     """
     def play_card(self, player, card):
         ...
+    
+    """
+    Levanta una carta y retorna la carta levantada.
+    """
+    async def draw_card(self, player: Player) -> Card:
+        card = self.deck.pop_card()
+        player.hand.add_card(card)
+        return card
 
     """
     Deal 7 cards for each player in the list.
@@ -171,13 +213,11 @@ class UNOGame(BaseGame):
             for x in range(7):
                 player.hand.add_card(self.deck.pop_card())
 
-    def log(self, message: str) -> str:
-        return message
-    
+
 class GameView(discord.ui.View):    
     def __init__(self, *, timeout: float | None = 180, game):
         super().__init__(timeout=timeout)
-        self.game : BaseGame = game
+        self.game : BaseGame | UNOGame = game
 
     async def disable_all_items(self, interaction: discord.Interaction):
         for item in self.children:
@@ -186,18 +226,25 @@ class GameView(discord.ui.View):
 
 class StartMenu(GameView):
 
+    msg: discord.WebhookMessage
+    embed: discord.Embed
+
     @discord.ui.button(label="Start", style=discord.ButtonStyle.primary, custom_id="start")
     async def start(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         if interaction.user.id != self.game.game_data_config.owner.id:
             await interaction.response.send_message(content="You cannot start this game.", ephemeral=True)
             return
         else:
+            await self.msg.edit(view=None)
             self.game.start_game()
             self.stop()
         
     @discord.ui.button(label="Join", style=discord.ButtonStyle.primary, custom_id="join")
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(content=f"{self.game.add_player(user=interaction.user)}", ephemeral=True)
+        self.embed.description = f"{self.game.player_list}"
+        await self.msg.edit(embed=self.embed, view=self)
 
 class CardSelect(GameView):
     def __init__(self, *, timeout: float | None = 180, game, game_view: GameView):
@@ -208,6 +255,31 @@ class CardSelect(GameView):
     async def play(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(content="You sent a card", ephemeral=True)
         await self.game_view.hand_message.delete()
+        if self.game_view.draw_select_view != None: self.game_view.draw_select_view.stop()
+        self.game_view.stop()
+        self.stop()
+    
+    """Chequea si es turno del usuario que interactuó"""
+    async def interaction_check(self, interaction: discord.Interaction):
+        return self.game.players[self.game.currentIndex].id == interaction.user.id
+        
+class DrawSelectView(GameView):
+    def __init__(self, *, timeout: float | None = 180, game, game_view: GameView):
+        super().__init__(timeout=timeout, game=game)
+        self.game_view: GameView = game_view
+    
+    @discord.ui.button(label="Tirar")
+    async def throw(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(content="You sent a card", ephemeral=True)
+        await self.game_view.draw_message.delete()
+        self.game.last_action = f"{self.game.players[self.game.currentIndex].name} picked up a card and threw it: "
+        self.game_view.stop()
+        self.stop()
+    @discord.ui.button(label="Saltar")
+    async def keep(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(content="You kept the card", ephemeral=True)
+        await self.game_view.draw_message.delete()
+        self.game.last_action = f"{self.game.players[self.game.currentIndex].name} picked up a card, the last card is: "
         self.game_view.stop()
         self.stop()
 
@@ -215,15 +287,59 @@ class GameMenu(GameView):
     def __init__(self, *, timeout: float | None = 180, game):
         super().__init__(timeout=timeout, game=game)
         self.card_select_view: GameView | None = None
+        self.draw_select_view: DrawSelectView | None = None
     
+    foo: bool = False
+
+    """
+    check player turn, if is not just give emoji cards
+    """
     @discord.ui.button(label="Hand", style=discord.ButtonStyle.green, custom_id="hand")
     async def hand(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        self.hand_message = await interaction.followup.send(content="Your hand", ephemeral=True, wait=True, view=self.card_select_view)
+        player = self.game.get_player_by_id(interaction.user.id) # obtain player from the list
+        if player == self.game.players[self.game.currentIndex]:
+            self.card_select_view = CardSelect(game=self.game, timeout=120, game_view=self)
+            await interaction.response.defer(ephemeral=True)
+            self.hand_message = await interaction.followup.send(content="Your hand", ephemeral=True, wait=True, view=self.card_select_view)
+            await self.card_select_view.wait()
+        else:
+            await interaction.response.send_message(content="No es tu turno pedazo de pelotudo", ephemeral=True)
 
+    """
+    check player turn, if is not just return ephemeral message "it's' not your turn"
+    """
     @discord.ui.button(label="Draw", style=discord.ButtonStyle.grey, custom_id="draw")
     async def draw(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(content="You draw a card", ephemeral=True)
+        if self.card_select_view != None: self.card_select_view.stop()
+        if self.foo == True: return
+        player = self.game.get_player_by_id(interaction.user.id)
+        if player == self.game.players[self.game.currentIndex]:
+            card = await self.game.draw_card(player)
+            if card.validate(self.game.graveyard.last_card):
+                print(f"La puedes tirar: {card}")
+                self.foo = True
+                await interaction.response.defer(ephemeral=True)
+                self.draw_select_view = DrawSelectView(game=self.game, timeout=120, game_view=self)
+                self.draw_message = await interaction.followup.send(content=f"Levantaste {card}, la queri tira?", ephemeral=True, wait=True, view=self.draw_select_view)
+                await self.draw_select_view.wait()
+            else:
+                print(f"No la puedes tirar: {card}")
+                self.game.last_action = f"{player.name} picked up a card, the last card is: "
+                await interaction.response.send_message(content="You draw a card", ephemeral=True)
+            self.stop()
+        else:
+            print("Drawcard: No es tu turno")
+            await interaction.response.send_message(content="No es tu turno, no entiendes? pedazo de inútil", ephemeral=True)
+    
+    """
+    Chequea si el usuario que interactuó realmente está jugando.
+    """
+    async def interaction_check(self, interaction: discord.Interaction):
+        player = self.game.get_player_by_id(interaction.user.id)
+        if player not in self.game.players:
+            await interaction.response.send_message("No estás jugando")
+            return False
+        else: return True
 
 """
 Clase involucrada en enviar mensajes, recibir comandos, hacer el manejo entero del juego usando la GameClass y
@@ -232,28 +348,22 @@ además va accionar en base a los resultados al final del juego.
 class Main:
     def __init__(self, ctx) -> None:
         self.ctx : discord.Interaction = ctx # First command interaction
-        self.game : UNOGame = UNOGame(GameDataConfig(owner=ctx.user))
+        self.game : UNOGame = UNOGame(GameConfig(owner=ctx.user))
   
     async def start(self):
         self.main_view : GameView = StartMenu(game=self.game)
         await self.game_state_message() # ingresa al bucle
 
     async def game_state_message(self):
-        if self.game.status == "Waiting":
+        if self.game.status == GameState.WAITING:
             # Juego no iniciado
             await self.main_menu_message(ctx=self.ctx, view=self.main_view)
             await self.main_view.wait()
-        elif self.game.status == "Started":
+        elif self.game.status == GameState.PLAYING:
             # Juego iniciado
             self.game_view = GameMenu(timeout=None,game=self.game)
-            self.card_select_view = CardSelect(timeout=None,game=self.game, game_view=self.game_view)
-
-            # give card select view to hand
-            self.game_view.card_select_view = self.card_select_view
-
             await self.game_menu_message(ctx=self.ctx, view=self.game_view)
             await self.game_view.wait()
-            await self.card_select_view.wait()
         else:
             # Juego terminado o cancelado
             self.end_cycle()
@@ -268,11 +378,19 @@ class Main:
         ...
 
     async def main_menu_message(self, ctx: discord.Interaction, view: GameView):
-        embed = discord.Embed(title="UNO Beta", description=f"{self.game.player_list}")
-        await ctx.response.send_message(embed=embed, view=view)
+        await ctx.response.defer()
+        embed = discord.Embed(title="UNO Beta")
+        embed.description = f"```markdown\n{self.game.player_list}```"
+        start_msg = await ctx.followup.send(embed=embed, view=view)
+        view.msg = start_msg
+        view.embed = embed
 
     async def game_menu_message(self, ctx: discord.Interaction, view: GameView):
-        embed = discord.Embed(title="UNO Beta", description=f"{self.game.graveyard.last_card}\n{self.game.player_list}")
+        embed = discord.Embed(title="UNO Beta", color=self.game.graveyard.last_card.color_code, description=(
+            f"{self.game.last_action + self.game.graveyard.last_card.name}\n"
+            f"```markdown\n{self.game.player_list}```"
+        ))
+        embed.set_thumbnail(url=self.game.graveyard.last_card.image_url)
         await ctx.channel.send(embed=embed, view=view)
 
 
