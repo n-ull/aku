@@ -1,5 +1,6 @@
 import random
 import discord
+import settings
 from dataclasses import dataclass
 
 # game imports
@@ -7,6 +8,8 @@ from ..base.base_game import BaseGame, GameConfig, GameState, Player
 from .card import Card
 from .card_collection import Hand, Deck
 from .interface import GameView, StartMenu, GameMenu
+
+logger = settings.logging.getLogger("game")
 
 @dataclass
 class UnoGameConfig(GameConfig):
@@ -21,15 +24,27 @@ class UNOGame(BaseGame):
         super().__init__(data)
         self.deck: Deck = Deck()
         self.graveyard: Deck = Deck()
+        self.stack: int = 0
         self.last_action: str = "Game started with: "
         self.winner: Player
+        self.emoji_collection: list[discord.Emoji]
         # self.thread: discord.Thread = data.thread
+
+    async def get_emojis(self, ctx: discord.Client) -> list[discord.Emoji]:
+        first_guild : discord.Guild = ctx.get_guild(892586895282958376)
+        second_guild : discord.Guild = ctx.get_guild(892602982800162837)
+        emoji_list: list[discord.Emoji] = []
+        a = await first_guild.fetch_emojis()
+        b = await second_guild.fetch_emojis()
+        emoji_list.extend(a)
+        emoji_list.extend(b)
+        self.emoji_collection = emoji_list
 
     def start_game(self):
         if self.status != GameState.WAITING: return print("Game already started...")
 
         self.deck.generate_deck()
-        random.shuffle(self.deck.cards)
+        # random.shuffle(self.deck.cards)
 
         self.deal_cards()
 
@@ -68,7 +83,7 @@ class UNOGame(BaseGame):
     Skip Turn
     If Card has Effect resolve Card Effect (For the next player)
     """
-    async def play_card(self, player: Player, card) -> Card | None:
+    async def play_card(self, player: Player, card: int) -> Card | None:
         if player is not self.current_player: return None
         card: Card = player.hand.get_card_by_id(card)
         if card == None: return print("ERROR: Card doesn't exist")
@@ -116,12 +131,14 @@ Clase involucrada en enviar mensajes, recibir comandos, hacer el manejo entero d
 además va accionar en base a los resultados al final del juego.
 """
 class Main:
-    def __init__(self, ctx) -> None:
+    def __init__(self, ctx: discord.Interaction) -> None:
         self.ctx : discord.Interaction = ctx # First command interaction
-        self.game : UNOGame = UNOGame(GameConfig(owner=ctx.user))
-  
+        self.game : UNOGame = UNOGame(GameConfig(owner=ctx.user, ctx=ctx.client))
+
     async def start(self):
+        logger.info(f"UNO!: Game Started 💙")
         self.main_view : GameView = StartMenu(game=self.game)
+        await self.game.get_emojis(self.ctx.client)
         await self.game_state_message() # ingresa al bucle
 
     async def game_state_message(self):
@@ -131,6 +148,7 @@ class Main:
             await self.main_view.wait()
         elif self.game.status == GameState.PLAYING:
             # Juego iniciado
+            is_current_player_last_card:bool = len(self.game.current_player.hand.cards) == 1
             self.game_view = GameMenu(timeout=None,game=self.game)
             await self.game_menu_message(ctx=self.ctx, view=self.game_view)
             await self.game_view.wait()
@@ -138,7 +156,6 @@ class Main:
             # Juego terminado o cancelado
             self.end_cycle()
             return
-            ...
         await self.game_state_message()
 
     """
@@ -151,6 +168,7 @@ class Main:
         await ctx.response.defer()
         embed = discord.Embed(title="UNO Beta")
         embed.description = f"```markdown\n{self.game.player_list}```"
+        embed.set_footer(text="If the game doesn't start in 10 minutes will be cancelled.")
         start_msg = await ctx.followup.send(embed=embed, view=view)
         view.msg = start_msg
         view.embed = embed
@@ -161,4 +179,6 @@ class Main:
             f"```markdown\n{self.game.player_list}```"
         ))
         embed.set_thumbnail(url=self.game.graveyard.last_card.image_url)
-        await ctx.channel.send(embed=embed, view=view)
+        embed.add_field(inline=True,name="Orientation:", value=f"{'⏬ Down' if self.game.is_clockwise else '⏫ Up'}")
+        embed.add_field(inline=True,name="Stack:", value=f"{self.game.stack}")
+        await ctx.channel.send(content=f"<@{self.game.current_player.id}>'s turn", embed=embed, view=view)

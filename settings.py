@@ -50,6 +50,12 @@ LOGGING_CONFIG = {
             "level": "INFO",
             "propagate": False,
         },
+        "game": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "discord": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
 

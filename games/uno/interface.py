@@ -1,7 +1,10 @@
-from typing import List
+from typing import List, Optional
 import discord
+import settings
 from ..base.base_game import BaseGame
-from .card import Card
+from .card import Card, CardFilter
+
+logger = settings.logging.getLogger("game")
 
 class GameView(discord.ui.View):    
     def __init__(self, *, timeout: float | None = 180, game):
@@ -32,8 +35,44 @@ class StartMenu(GameView):
     @discord.ui.button(label="Join", style=discord.ButtonStyle.primary, custom_id="join")
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(content=f"{self.game.add_player(user=interaction.user)}", ephemeral=True)
-        self.embed.description = f"{self.game.player_list}"
+        self.embed.description = (
+            "Join and play UNO!"
+            f"```markdown\n{self.game.player_list}```"
+        )
         await self.msg.edit(embed=self.embed, view=self)
+
+class WildMenu(discord.ui.View):
+    def __init__(self, *, timeout: float | None = 180, card: Card):
+        super().__init__(timeout=timeout)
+        self.card = card
+
+    def on_timeout(self):
+        self.card.color = "R"
+
+    @discord.ui.button(emoji="🔴", custom_id="R")
+    async def red(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.card.color = "R"
+        self.stop()
+
+    @discord.ui.button(emoji="🟡", custom_id="Y")
+    async def yellow(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.card.color = "Y"
+        self.stop()
+
+    @discord.ui.button(emoji="🔵", custom_id="B")
+    async def blue(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.card.color = "B"
+        self.stop()
+
+    @discord.ui.button(emoji="🟢", custom_id="G")
+    async def green(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.card.color = "G"
+        self.stop()
+
 
 class CardSelectItem(discord.SelectOption):
     ...
@@ -44,25 +83,28 @@ class CardSelectMenu(discord.ui.Select):
         self.cards: list[Card] = cards
         self.game: BaseGame = game
         for card in cards:
-            item = CardSelectItem(label=f"{card.name}", value=f"{card.id}")
+            item = CardSelectItem(label=f"{card.name}", value=f"{card.id}", emoji=card.color_emoji)
             self.append_option(option=item)
 
     # send the card item value to the game, the game will search for the card in the hand and send it to graveyard.
     async def callback(self, interaction: discord.Interaction):
         card_id = interaction.data.get('values')[0]
         player = self.game.get_player_by_id(interaction.user.id)
+        the_actual_card=player.hand.get_card_by_id(card_id)
+
+        if(the_actual_card.is_wild):
+            wild_view = WildMenu(timeout=60, card=the_actual_card)
+            await interaction.response.send_message(content="Select a new color", view=wild_view, ephemeral=True)
+            await wild_view.wait()
+
         card: Card | None = await self.game.play_card(player, card_id)
-        if card == None:
-            await interaction.response.send_message(content="Is not your turn...", ephemeral=True)
-        else:
-            await interaction.response.send_message(content=f"You sent {card.name}", ephemeral=True)
         self.view.stop()
 
 
 class CardSelect(GameView):
     def __init__(self, *, timeout: float | None = 180, game, game_view: GameView, card_list: list[Card] | None):
         super().__init__(timeout=timeout, game=game)
-        self.game_view = game_view
+        self.game_view: GameView = game_view
         self.card_list = card_list
     
     async def generate_hand(self):
@@ -76,25 +118,29 @@ class CardSelect(GameView):
 
         
 class DrawSelectView(GameView):
-    def __init__(self, *, timeout: float | None = 180, game, game_view: GameView):
+    def __init__(self, *, timeout: float | None = 180, game, game_view: GameView, card: Card):
         super().__init__(timeout=timeout, game=game)
         self.game_view: GameView = game_view
+        self.card: Card = card
     
     """
     @TODO: Send card to game
     """
-    @discord.ui.button(label="Tirar")
+    @discord.ui.button(label="Throw")
     async def throw(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(content="You sent a card", ephemeral=True)
-        await self.game_view.draw_message.delete()
-        self.game.last_action = f"{self.game.players[self.game.current_player_index].name} picked up a card and threw it: "
+        await self.game_view.draw_message.edit(view=None)
+        await self.game.play_card(self.game.current_player, card=self.card.id)
+        self.game.last_action = f"{self.game.current_player.name} picked up a card and threw it: "
         self.game_view.stop()
         self.stop()
-    @discord.ui.button(label="Saltar")
+
+    @discord.ui.button(label="Skip")
     async def keep(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(content="You kept the card", ephemeral=True)
-        await self.game_view.draw_message.delete()
+        await self.game_view.draw_message.edit(view=None)
         self.game.last_action = f"{self.game.players[self.game.current_player_index].name} picked up a card, the last card is: "
+        self.game.skip_turn()
         self.game_view.stop()
         self.stop()
 
@@ -103,6 +149,7 @@ class GameMenu(GameView):
         super().__init__(timeout=timeout, game=game)
         self.card_select_view: GameView | None = None
         self.draw_select_view: DrawSelectView | None = None
+        self.hand_message: discord.WebhookMessage | None = None
     
     foo: bool = False
 
@@ -113,17 +160,21 @@ class GameMenu(GameView):
     async def hand(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.game.get_player_by_id(interaction.user.id) # obtain player from the list
         if player == self.game.players[self.game.current_player_index]:
+            if self.hand_message is not None: await self.hand_message.edit(view=None)
             hand = player.hand.generate_valid_hand(last_card=self.game.graveyard.last_card)
+            emoji_hand = player.hand.emoji_hand(self.game.emoji_collection)
 
             if len(hand) == 0:
                 # No tienes cartas para tirar
-                await interaction.response.send_message("You don't have any valid card.") # REPLACE WITH EMOJIS
+                await interaction.response.send_message(f"{emoji_hand}") # REPLACE WITH EMOJIS
             else:
                 self.card_select_view = CardSelect(game=self.game, timeout=120, game_view=self, card_list=hand)
                 await self.card_select_view.generate_hand()
                 await interaction.response.defer(ephemeral=True)
-                self.hand_message = await interaction.followup.send(content="REPLACE WITH EMOJIS", ephemeral=True, wait=True, view=self.card_select_view)
+                self.hand_message = await interaction.followup.send(content=f"{emoji_hand}", ephemeral=True, wait=True, view=self.card_select_view)
                 await self.card_select_view.wait()
+                new_hand = player.hand.emoji_hand(self.game.emoji_collection)
+                await self.hand_message.edit(content=new_hand, view=None)
                 self.stop()
         else:
             await interaction.response.send_message(content="No es tu turno pedazo de pelotudo", ephemeral=True)
@@ -136,23 +187,26 @@ class GameMenu(GameView):
         if self.card_select_view != None: self.card_select_view.stop()
         if self.foo == True: return
         player = self.game.get_player_by_id(interaction.user.id)
+        # check player turn
         if player == self.game.players[self.game.current_player_index]:
+            if self.hand_message is not None: await self.hand_message.edit(view=None)
             card = await self.game.draw_card(player)
-            if card.validate(self.game.graveyard.last_card):
-                print(f"La puedes tirar: {card}")
+            if card.validate(self.game.graveyard.last_card) and not card.is_wild:
+                logger.info(msg=f"UNO: Player can throw {card.name} ✅")
                 self.foo = True
                 # TODO
                 await interaction.response.defer(ephemeral=True)
-                self.draw_select_view = DrawSelectView(game=self.game, timeout=120, game_view=self)
-                self.draw_message = await interaction.followup.send(content=f"Levantaste {card}, la queri tira?", ephemeral=True, wait=True, view=self.draw_select_view)
+                self.draw_select_view = DrawSelectView(game=self.game, timeout=120, game_view=self, card=card)
+                self.draw_message = await interaction.followup.send(content=f"You picked up {card.name}, you want to throw it?", ephemeral=True, wait=True, view=self.draw_select_view)
                 await self.draw_select_view.wait()
             else:
-                print(f"No la puedes tirar: {card}")
+                logger.info(msg=f"UNO: Player can't throw {card.name} 🚫")
                 self.game.last_action = f"{player.name} picked up a card, the last card is: "
                 await interaction.response.send_message(content="You draw a card", ephemeral=True)
+                self.game.skip_turn()
             self.stop()
         else:
-            await interaction.response.send_message(content="No es tu turno, no entiendes? pedazo de inútil", ephemeral=True)
+            await interaction.response.send_message(content="It's not your turn, asshole.", ephemeral=True)
     
     """
     Chequea si el usuario que interactuó realmente está jugando.
@@ -160,6 +214,6 @@ class GameMenu(GameView):
     async def interaction_check(self, interaction: discord.Interaction):
         player = self.game.get_player_by_id(interaction.user.id)
         if player not in self.game.players:
-            await interaction.response.send_message("No estás jugando")
+            await interaction.response.send_message("You are not even playing, are you dumb?")
             return False
         else: return True

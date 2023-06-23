@@ -1,3 +1,4 @@
+from discord import Emoji
 from .card import Card, CardFilter, CardFilterFunctions
 
 class CardCollection:
@@ -27,7 +28,7 @@ class Deck(CardCollection):
                 self.cards.append(Card(color, value))
         for x in range(4):
             self.cards.append(Card('WILD', 'WILD'))
-            self.cards.append(Card('WILD', 'WILD+4'))
+            self.cards.append(Card('WILD', '+4'))
     
     def pop_card(self) -> Card:
         return self.cards.pop()
@@ -41,6 +42,13 @@ class Hand(CardCollection):
         card = next((c for c in self.cards if c.id == int(id)), None)
         return card
     
+    def emoji_hand(self, emoji_col: list[Emoji]):
+        string = ""
+        for card in self.cards:
+            emoji = next((e for e in emoji_col if e.name == f"{card.emoji_name}"), "Carta")
+            string += f"{emoji} "
+        return string
+
     def generate_valid_hand(self, last_card: Card, filter: CardFilter | None = None) -> list[Card]:
         cards: list[Card] = []
 

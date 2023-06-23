@@ -7,6 +7,7 @@ import discord
 @dataclass
 class GameConfig:
     owner: discord.Member
+    ctx: discord.Client
 
 class GameState(Enum):
     WAITING = 1

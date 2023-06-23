@@ -1,6 +1,9 @@
 from enum import Enum
 import random
+from discord import Emoji
 from typing import TypeVar
+
+import discord
 
 CardType = TypeVar('CardType', bound='Card')
 
@@ -27,6 +30,26 @@ class Card:
         return effects.get(self.value, False)
     
     @property
+    def emoji_name(self):
+        effects: dict = {
+            "+2": "PLUS2",
+            "+4": "PLUS4"
+        }
+
+        if self.value == "WILD": return "WILD"
+        return f"{self.color}{effects.get(self.value, self.value)}"
+    
+    @property
+    def color_emoji(self) -> str:
+        emojis: dict = {
+            "R": "🔴",
+            "G": "🟢",
+            "B": "🔵",
+            "Y": "🟡",
+        }
+        return emojis.get(self.color, "⚫")
+
+    @property
     def color_code(self) -> int:
         colors: dict = {
             "R": 0xff5555,
@@ -38,17 +61,19 @@ class Card:
     
     @property
     def image_url(self) -> str:
-        return f"https://raw.githubusercontent.com/Ratismal/UNO/master/cards/{self.color}{self.value}.png"
+        link_card_name = f"{self.color}{self.value}" if not self.is_wild else f"{self.value}"
+        return f"https://raw.githubusercontent.com/Ratismal/UNO/master/cards/{link_card_name}.png"
 
     @property
     def name(self) -> str:
         color_name: dict = {
-            "R": "Red",
-            "B": "Blue",
-            "Y": "Yellow",
-            "G": "Green"
+            "R": "RED",
+            "B": "BLUE",
+            "Y": "YELLOW",
+            "G": "GREEN",
         }
-        return f"{color_name.get(self.color,'Wild')} {self.value}"
+        name = f"{color_name.get(self.color, 'COLOR')} {self.value}" if not self.is_wild else f"{self.color}"
+        return name
 
     def __str__(self) -> str:
         return f"{self.color}{self.value}"
