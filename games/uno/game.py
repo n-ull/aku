@@ -66,7 +66,24 @@ class UNOGame(BaseGame):
             self.current_player_index = (self.current_player_index + 1) % len(self.players)
         else:
             self.current_player_index = (self.current_player_index - 1 + len(self.players)) % len(self.players)
-        
+    
+    def punish_user(self):
+        if self.current_player.warns == 2:
+            self.del_player(self.current_player)
+
+            if len(self.players) == 1:
+              self.status = GameState.CANCELLED
+            return
+                
+        else:
+            self.current_player.hand.add_card(self.deck.pop_card())
+            self.current_player.hand.add_card(self.deck.pop_card())
+            self.current_player.hand.add_card(self.deck.pop_card())
+            self.current_player.warns += 1
+            logger.info(f"User punished: {self.current_player.name} has {self.current_player.warns} warns")
+            self.skip_turn()
+
+
     def check_win(self):
         if len(self.current_player.hand.cards) == 0:
             self.status = GameState.FINISHED
@@ -109,7 +126,7 @@ class UNOGame(BaseGame):
     """
     def deal_cards(self):
         for player in self.players:
-            for x in range(7):
+            for x in range(1):
                 player.hand.add_card(self.deck.pop_card())
     
     @property
@@ -133,7 +150,7 @@ además va accionar en base a los resultados al final del juego.
 class Main:
     def __init__(self, ctx: discord.Interaction) -> None:
         self.ctx : discord.Interaction = ctx # First command interaction
-        self.game : UNOGame = UNOGame(GameConfig(owner=ctx.user, ctx=ctx.client))
+        self.game : UNOGame = UNOGame(UnoGameConfig(owner=ctx.user, ctx=ctx.client))
 
     async def start(self):
         logger.info(f"UNO!: Game Started 💙")
@@ -149,12 +166,13 @@ class Main:
         elif self.game.status == GameState.PLAYING:
             # Juego iniciado
             is_current_player_last_card:bool = len(self.game.current_player.hand.cards) == 1
-            self.game_view = GameMenu(timeout=None,game=self.game)
+            self.game_view = GameMenu(timeout=self.game.game_data_config.turn_time,game=self.game)
             await self.game_menu_message(ctx=self.ctx, view=self.game_view)
-            await self.game_view.wait()
+            turn = await self.game_view.wait()
+            if turn: self.game.punish_user() # si turn devuelve true quiere decir que el jugador dejó pasar el tiempo
         else:
             # Juego terminado o cancelado
-            self.end_cycle()
+            await self.end_cycle()
             return
         await self.game_state_message()
 
@@ -162,7 +180,11 @@ class Main:
     Enviar resultado final
     """
     async def end_cycle(self):
-        ...
+        if self.game.status == GameState.CANCELLED:
+            await self.ctx.channel.send("Game has been cancelled because si mucho muy.")
+        else:
+            await self.ctx.channel.send(f"The indiscutible ganer (o sea ganador) es {self.game.winner.name}")
+        self.game = None
 
     async def main_menu_message(self, ctx: discord.Interaction, view: GameView):
         await ctx.response.defer()

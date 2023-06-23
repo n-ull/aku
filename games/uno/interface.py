@@ -46,7 +46,7 @@ class WildMenu(discord.ui.View):
         super().__init__(timeout=timeout)
         self.card = card
 
-    def on_timeout(self):
+    async def on_timeout(self):
         self.card.color = "R"
 
     @discord.ui.button(emoji="🔴", custom_id="R")
@@ -94,7 +94,7 @@ class CardSelectMenu(discord.ui.Select):
 
         if(the_actual_card.is_wild):
             wild_view = WildMenu(timeout=60, card=the_actual_card)
-            await interaction.response.send_message(content="Select a new color", view=wild_view, ephemeral=True)
+            await interaction.response.send_message(content="Select a new color, you have 60 seconds.", view=wild_view, ephemeral=True)
             await wild_view.wait()
 
         card: Card | None = await self.game.play_card(player, card_id)
@@ -123,6 +123,10 @@ class DrawSelectView(GameView):
         self.game_view: GameView = game_view
         self.card: Card = card
     
+    async def on_timeout(self):
+        self.game.last_action = f"{self.game.players[self.game.current_player_index].name} picked up a card, the last card is: "
+        self.game.skip_turn()
+
     """
     @TODO: Send card to game
     """
@@ -153,6 +157,11 @@ class GameMenu(GameView):
     
     foo: bool = False
 
+    async def on_timeout(self):
+        if self.hand_message is not None: await self.hand_message.edit(view=None)
+        if self.card_select_view != None: self.card_select_view.stop()
+        if self.draw_select_view != None: self.draw_select_view.stop()
+
     """
     check player turn, if is not just give emoji cards
     """
@@ -163,6 +172,9 @@ class GameMenu(GameView):
             if self.hand_message is not None: await self.hand_message.edit(view=None)
             hand = player.hand.generate_valid_hand(last_card=self.game.graveyard.last_card)
             emoji_hand = player.hand.emoji_hand(self.game.emoji_collection)
+
+            if player.hand.last_card.is_wild and len(player.hand.cards) == 1:
+                hand = []
 
             if len(hand) == 0:
                 # No tienes cartas para tirar
@@ -196,8 +208,8 @@ class GameMenu(GameView):
                 self.foo = True
                 # TODO
                 await interaction.response.defer(ephemeral=True)
-                self.draw_select_view = DrawSelectView(game=self.game, timeout=120, game_view=self, card=card)
-                self.draw_message = await interaction.followup.send(content=f"You picked up {card.name}, you want to throw it?", ephemeral=True, wait=True, view=self.draw_select_view)
+                self.draw_select_view = DrawSelectView(game=self.game, timeout=60, game_view=self, card=card)
+                self.draw_message = await interaction.followup.send(content=f"You picked up {card.name}, you want to throw it?, you got 60 seconds.", ephemeral=True, wait=True, view=self.draw_select_view)
                 await self.draw_select_view.wait()
             else:
                 logger.info(msg=f"UNO: Player can't throw {card.name} 🚫")

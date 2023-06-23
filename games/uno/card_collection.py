@@ -47,7 +47,7 @@ class Hand(CardCollection):
         for card in self.cards:
             emoji = next((e for e in emoji_col if e.name == f"{card.emoji_name}"), "Carta")
             string += f"{emoji} "
-        return string
+        return string if len(string) > 2 else "Out of cards!"
 
     def generate_valid_hand(self, last_card: Card, filter: CardFilter | None = None) -> list[Card]:
         cards: list[Card] = []

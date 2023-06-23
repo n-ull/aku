@@ -44,6 +44,10 @@ class BaseGame:
     
     def start_game(self): ...
 
+    def skip_turn(self): ...
+
+    def punish_user(self): ...
+
     def get_player_by_id(self, id: int) -> Player | None:
         player = next((p for p in self.players if p.id == id), None)
         return player
