@@ -167,7 +167,7 @@ class Blackjack():
     def game_embed(self, instruction: str = "play") -> discord.Embed:
         match self.status:
             case "Playing":
-                color = discord.Colour.dark_gray()
+                color = discord.Colour.dark_grey()
             case "Lose":
                 color = discord.Colour.brand_red()
             case "Tie":

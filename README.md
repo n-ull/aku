@@ -21,7 +21,7 @@ ___
 | --- | --- |
 | Economia | ❌
 | Blackjack | ✅
-| UNO! | 🔜
+| UNO! | ✅
 | Batalla Naval | ❌
 | Ludo | ❌
 | Jackpot | ❌
