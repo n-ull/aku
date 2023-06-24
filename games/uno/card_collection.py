@@ -1,24 +1,8 @@
 from discord import Emoji
-from .card import Card
+from game_base import CardCollection
+from .card import UnoCard
 
-class CardCollection:
-    def __init__(self):
-        self.cards: list[Card] = []
-    
-    def add_card(self, card: Card):
-        self.cards.append(card)
-    
-    def del_card(self, card:Card):
-        self.cards.remove(card)
-    
-    def add_multiple_cards(self, cards: list[Card]):
-        self.cards.extend(cards)
-
-    @property
-    def last_card(self):
-        return self.cards[-1]
-    
-class Deck(CardCollection):
+class UnoDeck(CardCollection):
     def __init__(self):
         super().__init__()
 
@@ -27,28 +11,27 @@ class Deck(CardCollection):
         values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "SKIP", "REVERSE", "+2"]
         for color in colors:
             for value in values:
-                self.cards.append(Card(color, value))
-                self.cards.append(Card(color, value))
+                self.cards.append(UnoCard(color, value))
+                self.cards.append(UnoCard(color, value))
         for x in range(4):
-            self.cards.append(Card('WILD', 'WILD'))
-            self.cards.append(Card('WILD', '+4'))
+            self.cards.append(UnoCard('WILD', 'WILD'))
+            self.cards.append(UnoCard('WILD', 'WILD+4'))
     
-    def pop_card(self) -> Card:
+    def pop_card(self) -> UnoCard:
         return self.cards.pop()
     
-    def pop_multiple_cards(self, quantity: int) -> list[Card]:
-        popped_cards: list[Card] = []
+    def pop_multiple_cards(self, quantity: int) -> list[UnoCard]:
+        popped_cards: list[UnoCard] = []
         for x in range(quantity):
             card = self.cards.pop()
             popped_cards.append(card)
         return popped_cards
         
-
-class Hand(CardCollection):
+class UnoHand(CardCollection):
     def __init__(self):
         super().__init__()
 
-    def get_card_by_id(self, id: str) -> Card | None:
+    def get_card_by_id(self, id: str) -> UnoCard | None:
         card = next((c for c in self.cards if c.id == int(id)), None)
         return card
     
@@ -59,13 +42,13 @@ class Hand(CardCollection):
             string += f"{emoji} "
         return string if len(string) > 2 else "Out of cards!"
 
-    def generate_valid_hand(self, last_card: Card) -> list[Card]:
-        cards: list[Card] = []
+    def generate_valid_hand(self, last_card: UnoCard) -> list[UnoCard]:
+        cards: list[UnoCard] = []
         for card in self.cards:
             if card.validate(last_card): cards.append(card)
         return cards
     def generate_plus_hand(self):
-        cards: list[Card] = []
+        cards: list[UnoCard] = []
         for card in self.cards:
             if card.value == "+2": cards.append(card)
         return cards

@@ -1,14 +1,12 @@
-from enum import Enum
 import random
-from discord import Emoji
-from typing import TypeVar
 import discord
-
+from typing import TypeVar
+from game_base import Card
 from .card_effects import EffectsEnum
 
 CardType = TypeVar('CardType', bound='Card')
 
-class Card:
+class UnoCard(Card):
     def __init__(self, color: str, value: str) -> None:
         self.color: str = color
         self.value: str = value
@@ -17,11 +15,15 @@ class Card:
     def validate(self, card: CardType):
         return self.color == card.color or self.value == card.value or self.is_wild
 
+    def get_one_emoji(self, emoji_collection: list[discord.Emoji]) -> discord.Emoji:
+        emoji = next((e for e in emoji_collection if e.name == self.emoji_name))
+        return emoji
+
     @property
     def effect(self):
         effects: dict = {
             "+2": EffectsEnum.PLUSTWO.value,
-            "+4": EffectsEnum.PLUSFOUR.value,
+            "WILD+4": EffectsEnum.PLUSFOUR.value,
             "SKIP": EffectsEnum.SKIP.value,
             "REVERSE": EffectsEnum.REVERSE.value,
         }
@@ -44,7 +46,7 @@ class Card:
     def emoji_name(self):
         effects: dict = {
             "+2": "PLUS2",
-            "+4": "PLUS4"
+            "WILD+4": "PLUS4"
         }
 
         if self.value == "WILD": return "WILD"
@@ -72,9 +74,7 @@ class Card:
     
     @property
     def image_url(self) -> str:
-        link_card_name = f"{self.color}{self.value}" if not self.is_wild else f"{self.value}"
-        if self.value == "+4":
-            link_card_name = f"{self.color}WILD+4"
+        link_card_name = f"{self.color}{self.value}"
         return f"https://raw.githubusercontent.com/Ratismal/UNO/master/cards/{link_card_name}.png"
 
     @property
@@ -87,7 +87,7 @@ class Card:
         }
         name = f"{color_name.get(self.color, 'COLOR')} {self.value}"
         if self.is_wild:
-            name = f"{self.color}"
+            name = f"{self.value}"
         return name
 
     def __str__(self) -> str:

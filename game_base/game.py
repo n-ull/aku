@@ -1,28 +1,9 @@
+from random import shuffle
+from discord import Member
+from .game_state import GameState, GameConfig
+from .player import Player
 
-from dataclasses import dataclass
-from enum import Enum
-from ..uno.card_collection import Hand
-import discord
-
-@dataclass
-class GameConfig:
-    owner: discord.Member
-    ctx: discord.Client
-
-class GameState(Enum):
-    WAITING = 1
-    PLAYING = 2
-    FINISHED = 3
-    CANCELLED = 4
-
-class Player:
-    def __init__(self, user: discord.Member) -> None:
-        self.name = user.display_name
-        self.id = user.id
-        self.hand = Hand()
-        self.warns = 0
-
-class BaseGame:
+class GameBase:
     def __init__(self, data: GameConfig) -> None:
         self.players: list[Player] = [Player(data.owner)]
         self.current_player_index: int = 0
@@ -30,10 +11,11 @@ class BaseGame:
         self.game_data_config: GameConfig = data
         self.status: GameState = GameState.WAITING
 
-    def add_player(self, user: discord.Member):
+    def add_player(self, user: Member):
         # check if can add
-        if self.status == GameState.PLAYING: return print("Game already started...")
-        if user.id in [p.id for p in self.players]: return print("Player already in the list.")
+        if self.status == GameState.PLAYING: return
+        if user.id in [p.id for p in self.players]: return f"You are already in the game..."
+        if len(self.players) == self.game_data_config.max_players: return f"Maximum players: {self.game_data_config.max_players}"
 
         self.players.append(Player(user))
         return f"{user.display_name} joined the game succesfully."
@@ -48,6 +30,9 @@ class BaseGame:
 
     def punish_user(self): ...
 
+    def randomize_players(self):
+        shuffle(self.players)
+
     def get_player_by_id(self, id: int) -> Player | None:
         player = next((p for p in self.players if p.id == id), None)
         return player
@@ -55,3 +40,7 @@ class BaseGame:
     @property
     def current_player(self) -> Player:
         return self.players[self.current_player_index]
+    
+    @property
+    def next_player(self) -> Player:
+        return self.players[(self.current_player_index + 1) % len(self.players)]
