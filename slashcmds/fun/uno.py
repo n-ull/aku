@@ -32,11 +32,5 @@ async def uno(ctx: discord.Interaction, randomize: int = 2):
             await ctx.channel.send(embed=result_embed)
         del ctx.client.games[ctx.guild_id]
 
-@app_commands.command()
-async def test(ctx: discord.Interaction):
-    """pa pruebiar"""
-    print(ctx.client.games)
-
 async def setup(bot):
     bot.tree.add_command(uno)
-    bot.tree.add_command(test)
