@@ -111,6 +111,9 @@ class UNOGame(BaseGame):
         self.graveyard.add_card(card)
         self.skip_turn()
 
+        if card.has_effect or card.value == "+4":
+            card.effect.execute(game=self)
+
         return card
     
     """

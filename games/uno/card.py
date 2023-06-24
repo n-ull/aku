@@ -2,8 +2,9 @@ from enum import Enum
 import random
 from discord import Emoji
 from typing import TypeVar
-
 import discord
+
+from .card_effects import EffectsEnum
 
 CardType = TypeVar('CardType', bound='Card')
 
@@ -15,6 +16,16 @@ class Card:
 
     def validate(self, card: CardType):
         return self.color == card.color or self.value == card.value or self.is_wild
+
+    @property
+    def effect(self):
+        effects: dict = {
+            "+2": EffectsEnum.PLUSTWO.value,
+            "+4": EffectsEnum.PLUSFOUR.value,
+            "SKIP": EffectsEnum.SKIP.value,
+            "REVERSE": EffectsEnum.REVERSE.value,
+        }
+        return effects.get(self.value, None)
 
     @property
     def is_wild(self):
@@ -62,6 +73,8 @@ class Card:
     @property
     def image_url(self) -> str:
         link_card_name = f"{self.color}{self.value}" if not self.is_wild else f"{self.value}"
+        if self.value == "+4":
+            link_card_name = f"{self.color}WILD+4"
         return f"https://raw.githubusercontent.com/Ratismal/UNO/master/cards/{link_card_name}.png"
 
     @property
@@ -72,7 +85,11 @@ class Card:
             "Y": "YELLOW",
             "G": "GREEN",
         }
-        name = f"{color_name.get(self.color, 'COLOR')} {self.value}" if not self.is_wild else f"{self.color}"
+        name = f"{color_name.get(self.color, 'COLOR')} {self.value}"
+        if self.is_wild:
+            name = f"{self.color}"
+        if self.value == "+4":
+            name += " +4"
         return name
 
     def __str__(self) -> str:
