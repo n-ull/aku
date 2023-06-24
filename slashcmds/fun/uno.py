@@ -20,7 +20,6 @@ async def uno(ctx: discord.Interaction, randomize: int = 0):
     except:
         logger.warn("UNO: AN EXCEPTION OCCURRED")
     finally:
-        # logger.info("UNO GAME ENDED! CLEANING...")
         result_embed: discord.Embed = discord.Embed(title=f"UNO! {ctx.user.display_name} finished:")
         if main.game.status.name != "FINISHED":
             result_embed.description = "Game has been cancelled."
