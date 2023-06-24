@@ -1,8 +1,11 @@
-from typing import List, Optional
+from typing import Any, List, Optional, Union
 import discord
+from discord.emoji import Emoji
+from discord.enums import ButtonStyle
+from discord.partial_emoji import PartialEmoji
 import settings
 from ..base.base_game import BaseGame
-from .card import Card, CardFilter
+from .card import Card
 
 logger = settings.logging.getLogger("game")
 
@@ -18,14 +21,15 @@ class GameView(discord.ui.View):
 
 class StartMenu(GameView):
 
-    msg: discord.WebhookMessage
+    msg: discord.Message | discord.WebhookMessage
     embed: discord.Embed
 
     @discord.ui.button(label="Start", style=discord.ButtonStyle.primary, custom_id="start")
     async def start(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         if interaction.user.id != self.game.game_data_config.owner.id:
-            await interaction.response.send_message(content="You cannot start this game.", ephemeral=True)
+            # TODO: esto figura como que ya está respondido por el defer anterior
+            await interaction.followup.send(content="You cannot start this game.", ephemeral=True, wait=False)
             return
         else:
             await self.msg.edit(view=None)
@@ -73,6 +77,16 @@ class WildMenu(discord.ui.View):
         self.card.color = "G"
         self.stop()
 
+class StackDrawItem(discord.ui.Button):
+    def __init__(self, *, style: ButtonStyle = ButtonStyle.secondary, label: str | None = None, disabled: bool = False, custom_id: str | None = None, url: str | None = None, emoji: str | Emoji | PartialEmoji | None = None, row: int | None = None, game):
+        super().__init__(style=style, label=label, disabled=disabled, custom_id=custom_id, url=url, emoji=emoji, row=row)
+        self.game = game
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.game.current_player.id: return await interaction.response.send_message(content="It's not your turn", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        self.game.stack_resolve()
+        self.view.stop()
 
 class CardSelectItem(discord.SelectOption):
     ...
@@ -127,9 +141,6 @@ class DrawSelectView(GameView):
         self.game.last_action = f"{self.game.players[self.game.current_player_index].name} picked up a card, the last card is: "
         self.game.skip_turn()
 
-    """
-    @TODO: Send card to game
-    """
     @discord.ui.button(label="Throw")
     async def throw(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(content="You sent a card", ephemeral=True)
@@ -170,26 +181,31 @@ class GameMenu(GameView):
         player = self.game.get_player_by_id(interaction.user.id) # obtain player from the list
         if player == self.game.players[self.game.current_player_index]:
             if self.hand_message is not None: await self.hand_message.edit(view=None)
-            hand = player.hand.generate_valid_hand(last_card=self.game.graveyard.last_card)
+            await interaction.response.defer(ephemeral=True)
+            valid_hand = player.hand.generate_valid_hand(last_card=self.game.graveyard.last_card)
             emoji_hand = player.hand.emoji_hand(self.game.emoji_collection)
 
             if player.hand.last_card.is_wild and len(player.hand.cards) == 1:
-                hand = []
+                valid_hand = []
 
-            if len(hand) == 0:
-                # No tienes cartas para tirar
-                await interaction.response.send_message(f"{emoji_hand}") # REPLACE WITH EMOJIS
+            if self.game.stack >= 2:
+                valid_hand = player.hand.generate_plus_hand()
+
+            if len(valid_hand) == 0:
+                # TODO: This approach doesn't work
+                logger.info(f"{player.name} doesn't have valid cards to play.")
+                await interaction.followup.send(content=emoji_hand, ephemeral=True, wait=False)
             else:
-                self.card_select_view = CardSelect(game=self.game, timeout=120, game_view=self, card_list=hand)
+                self.card_select_view = CardSelect(game=self.game, timeout=120, game_view=self, card_list=valid_hand)
                 await self.card_select_view.generate_hand()
-                await interaction.response.defer(ephemeral=True)
                 self.hand_message = await interaction.followup.send(content=f"{emoji_hand}", ephemeral=True, wait=True, view=self.card_select_view)
                 await self.card_select_view.wait()
                 new_hand = player.hand.emoji_hand(self.game.emoji_collection)
                 await self.hand_message.edit(content=new_hand, view=None)
                 self.stop()
         else:
-            await interaction.response.send_message(content="No es tu turno pedazo de pelotudo", ephemeral=True)
+            player = self.game.get_player_by_id(interaction.user.id)
+            await interaction.response.send_message(content=player.hand.emoji_hand(self.game.emoji_collection), ephemeral=True)
 
     """
     check player turn, if is not just return ephemeral message "it's' not your turn"
@@ -206,7 +222,6 @@ class GameMenu(GameView):
             if card.validate(self.game.graveyard.last_card) and not card.is_wild:
                 logger.info(msg=f"UNO: Player can throw {card.name} ✅")
                 self.foo = True
-                # TODO
                 await interaction.response.defer(ephemeral=True)
                 self.draw_select_view = DrawSelectView(game=self.game, timeout=60, game_view=self, card=card)
                 self.draw_message = await interaction.followup.send(content=f"You picked up {card.name}, you want to throw it?, you got 60 seconds.", ephemeral=True, wait=True, view=self.draw_select_view)
@@ -214,7 +229,7 @@ class GameMenu(GameView):
             else:
                 logger.info(msg=f"UNO: Player can't throw {card.name} 🚫")
                 self.game.last_action = f"{player.name} picked up a card, the last card is: "
-                await interaction.response.send_message(content="You draw a card", ephemeral=True)
+                await interaction.response.send_message(content=f"You draw a card: {card.name}", ephemeral=True)
                 self.game.skip_turn()
             self.stop()
         else:
@@ -226,6 +241,6 @@ class GameMenu(GameView):
     async def interaction_check(self, interaction: discord.Interaction):
         player = self.game.get_player_by_id(interaction.user.id)
         if player not in self.game.players:
-            await interaction.response.send_message("You are not even playing, are you dumb?")
+            await interaction.response.send_message("You are not even playing, are you dumb?", ephemeral=True)
             return False
         else: return True

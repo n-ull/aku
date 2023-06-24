@@ -1,5 +1,5 @@
 from discord import Emoji
-from .card import Card, CardFilter, CardFilterFunctions
+from .card import Card
 
 class CardCollection:
     def __init__(self):
@@ -59,14 +59,13 @@ class Hand(CardCollection):
             string += f"{emoji} "
         return string if len(string) > 2 else "Out of cards!"
 
-    def generate_valid_hand(self, last_card: Card, filter: CardFilter | None = None) -> list[Card]:
+    def generate_valid_hand(self, last_card: Card) -> list[Card]:
         cards: list[Card] = []
-
-        if filter is None:
-            for card in self.cards:
-                if card.validate(last_card): cards.append(card)
-        
-        if filter is CardFilter:
-            cards = CardFilterFunctions.filter(filter_value=filter.value,cards=self.cards, last_card=last_card)
-        
+        for card in self.cards:
+            if card.validate(last_card): cards.append(card)
+        return cards
+    def generate_plus_hand(self):
+        cards: list[Card] = []
+        for card in self.cards:
+            if card.value == "+2": cards.append(card)
         return cards

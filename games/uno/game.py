@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ..base.base_game import BaseGame, GameConfig, GameState, Player
 from .card import Card
 from .card_collection import Hand, Deck
-from .interface import GameView, StartMenu, GameMenu
+from .interface import GameView, StartMenu, GameMenu, StackDrawItem
 
 logger = settings.logging.getLogger("game")
 
@@ -15,7 +15,7 @@ logger = settings.logging.getLogger("game")
 class UnoGameConfig(GameConfig):
     stackable: bool = True
     effect_win: bool = True
-    turn_time: float = 180
+    turn_time: float = 15
     min_players: int = 1
     max_players: int = 8
 
@@ -28,7 +28,7 @@ class UNOGame(BaseGame):
         self.last_action: str = "Game started with: "
         self.winner: Player
         self.emoji_collection: list[discord.Emoji]
-        # self.thread: discord.Thread = data.thread
+        self.thread: discord.Thread = None
 
     async def get_emojis(self, ctx: discord.Client) -> list[discord.Emoji]:
         first_guild : discord.Guild = ctx.get_guild(892586895282958376)
@@ -44,7 +44,7 @@ class UNOGame(BaseGame):
         if self.status != GameState.WAITING: return print("Game already started...")
 
         self.deck.generate_deck()
-        # random.shuffle(self.deck.cards)
+        random.shuffle(self.deck.cards)
 
         self.deal_cards()
 
@@ -68,18 +68,17 @@ class UNOGame(BaseGame):
             self.current_player_index = (self.current_player_index - 1 + len(self.players)) % len(self.players)
     
     def punish_user(self):
+        self.last_action = f"{self.current_player.name} lose his turn and eat 3 cards, last card is: " if self.stack == 0 else f"{self.current_player.name} lose his turn and eat 3 cards plus {self.stack} stacked cards, last card is: "
         if self.current_player.warns == 2:
             self.del_player(self.current_player)
 
             if len(self.players) == 1:
               self.status = GameState.CANCELLED
             return
-                
         else:
-            self.current_player.hand.add_card(self.deck.pop_card())
-            self.current_player.hand.add_card(self.deck.pop_card())
-            self.current_player.hand.add_card(self.deck.pop_card())
+            self.current_player.hand.add_multiple_cards(self.deck.pop_multiple_cards(3))
             self.current_player.warns += 1
+            if self.stack >= 1: self.stack_resolve(skip=False)
             logger.info(f"User punished: {self.current_player.name} has {self.current_player.warns} warns")
             self.skip_turn()
 
@@ -91,6 +90,12 @@ class UNOGame(BaseGame):
     
     def change_orientation(self):
         self.is_clockwise = not self.is_clockwise
+
+    def stack_resolve(self, skip: bool = True):
+        self.current_player.hand.add_multiple_cards(self.deck.pop_multiple_cards(self.stack))
+        self.stack = 0
+        if skip: self.skip_turn()
+            
 
     """
     Check if the player has his turn.
@@ -105,14 +110,14 @@ class UNOGame(BaseGame):
         card: Card = player.hand.get_card_by_id(card)
         if card == None: return print("ERROR: Card doesn't exist")
 
+        if card.has_effect or card.value == "+4":
+            card.effect.execute(game=self)
+
         # play process
         player.hand.del_card(card)
         self.last_action = f"{player.name} sent a card: "
         self.graveyard.add_card(card)
         self.skip_turn()
-
-        if card.has_effect or card.value == "+4":
-            card.effect.execute(game=self)
 
         return card
     
@@ -129,7 +134,9 @@ class UNOGame(BaseGame):
     """
     def deal_cards(self):
         for player in self.players:
-            for x in range(1):
+            # player.hand.add_card(Card("R", "+2"))
+            # player.hand.add_card(Card("WILD", "WILD"))
+            for x in range(7):
                 player.hand.add_card(self.deck.pop_card())
     
     @property
@@ -145,6 +152,13 @@ class UNOGame(BaseGame):
                 else:
                     list += f"- {player.name} ({len(player.hand.cards)} {'cards' if len(player.hand.cards) != 1 else 'card'})\n"
         return list
+    
+    @property
+    def next_player(self) -> Player:
+        if self.is_clockwise:
+            return self.players[(self.current_player_index + 1) % len(self.players)]
+        else:
+            return self.players[(self.current_player_index - 1 + len(self.players)) % len(self.players)]
 
 """
 Clase involucrada en enviar mensajes, recibir comandos, hacer el manejo entero del juego usando la GameClass y
@@ -167,11 +181,21 @@ class Main:
             await self.main_menu_message(ctx=self.ctx, view=self.main_view)
             await self.main_view.wait()
         elif self.game.status == GameState.PLAYING:
-            # Juego iniciado
             is_current_player_last_card:bool = len(self.game.current_player.hand.cards) == 1
             self.game_view = GameMenu(timeout=self.game.game_data_config.turn_time,game=self.game)
+
+            ### Check Stackable
+            if self.game.game_data_config.stackable and self.game.stack > 0:
+                self.game_view.remove_item(self.game_view.children[1])
+                self.game_view.add_item(StackDrawItem(label=f"Draw {self.game.stack} cards", style=discord.ButtonStyle.danger, game=self.game))
+            elif not self.game.game_data_config.stackable and self.game.stack == 2:
+                self.game.stack_resolve()
+
+            ### Await Turn ###
             await self.game_menu_message(ctx=self.ctx, view=self.game_view)
             turn = await self.game_view.wait()
+
+            ### If timeout
             if turn: self.game.punish_user() # si turn devuelve true quiere decir que el jugador dejó pasar el tiempo
         else:
             # Juego terminado o cancelado
@@ -190,12 +214,13 @@ class Main:
         self.game = None
 
     async def main_menu_message(self, ctx: discord.Interaction, view: GameView):
-        await ctx.response.defer()
         embed = discord.Embed(title="UNO Beta")
         embed.description = f"```markdown\n{self.game.player_list}```"
         embed.set_footer(text="If the game doesn't start in 10 minutes will be cancelled.")
-        start_msg = await ctx.followup.send(embed=embed, view=view)
-        view.msg = start_msg
+        await ctx.response.defer(thinking=False,ephemeral=False)
+        # start_msg = await ctx.followup.send(embed=embed, view=view, wait=True)
+        # self.game.thread = await ctx.channel.create_thread(name=f"UNO! {ctx.user.display_name}")
+        view.msg = await ctx.followup.send(embed=embed, view=view)
         view.embed = embed
 
     async def game_menu_message(self, ctx: discord.Interaction, view: GameView):
