@@ -27,7 +27,7 @@ class StartMenu(GameView):
 
     async def on_timeout(self):
         self.game.status = GameState.CANCELLED
-        logger.info("UNO HAS BEEN CANCELEITED")
+        # logger.info("UNO HAS BEEN CANCELEITED")
 
     @discord.ui.button(label="Start", style=discord.ButtonStyle.primary, custom_id="start")
     async def start(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -150,7 +150,6 @@ class DrawSelectView(GameView):
     @discord.ui.button(label="Throw")
     async def throw(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        # await interaction.response.send_message(content="> You sent the card", ephemeral=True)
         await self.game_view.draw_message.edit(view=None)
         await self.game.play_card(self.game.current_player, card=self.card.id)
         self.game.last_action = f"{self.game.current_player.name} picked up a card and threw it: "
@@ -160,14 +159,13 @@ class DrawSelectView(GameView):
     @discord.ui.button(label="Skip")
     async def keep(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        # await interaction.response.send_message(content="> You kept the card", ephemeral=True)
         await self.game_view.draw_message.edit(view=None)
         self.game.last_action = f"{self.game.players[self.game.current_player_index].name} picked up a card, the last card is: "
         self.game.skip_turn()
         self.game_view.stop()
         self.stop()
 
-class GameMenu(GameView):
+class PlayingView(GameView):
     def __init__(self, *, timeout: float | None = 180, game):
         super().__init__(timeout=timeout, game=game)
         self.card_select_view: CardSelectView | None = None
@@ -211,7 +209,7 @@ class GameMenu(GameView):
                 self.hand_message = await interaction.followup.send(content=f"{emoji_hand}", ephemeral=True, wait=True, view=self.card_select_view)
                 await self.card_select_view.wait()
                 new_hand = player.hand.emoji_hand(self.game.emoji_collection)
-                await self.hand_message.edit(content=new_hand, view=None)
+                if self.hand_message is not None: await self.hand_message.edit(content=new_hand, view=None)
                 self.stop()
         else:
             player = self.game.get_player_by_id(interaction.user.id)

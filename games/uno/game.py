@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from game_base import *
 from .card_collection import UnoHand, UnoDeck
 from .card import UnoCard
-from .interface import GameView, StartMenu, GameMenu, StackDrawItem
+from .interface import GameView, StartMenu, PlayingView, StackDrawItem
 
 logger = settings.logging.getLogger("game")
 
@@ -17,7 +17,7 @@ class UnoGameConfig(GameConfig):
     stackable: bool = True
     effect_win: bool = True
     randomize_players: bool = False
-    turn_time: float = 15
+    turn_time: float = 180
 
 class UnoPlayer(Player):
     def __init__(self, user: discord.Member) -> None:
@@ -147,8 +147,7 @@ class UNOGame(GameBase):
     """
     def deal_cards(self):
         for player in self.players:
-            for x in range(1):
-                player.hand.add_card(self.deck.pop_card())
+            player.hand.add_multiple_cards(self.deck.pop_multiple_cards(7))
     
     @property
     def player_list(self) -> str:
@@ -176,15 +175,15 @@ Clase involucrada en enviar mensajes, recibir comandos, hacer el manejo entero d
 además va accionar en base a los resultados al final del juego.
 """
 class Main:
-    def __init__(self, ctx: discord.Interaction) -> None:
+    def __init__(self, ctx: discord.Interaction, randomize) -> None:
         self.ctx : discord.Interaction = ctx # First command interaction
-        self.game : UNOGame = UNOGame(UnoGameConfig(owner=ctx.user, ctx=ctx.client))
+        self.game : UNOGame = UNOGame(UnoGameConfig(owner=ctx.user, ctx=ctx.client, randomize_players=randomize))
 
     async def start(self):
+        logger.info(f"UNO!: Game Started 💙")
         self.main_view : GameView = StartMenu(timeout=600,game=self.game)
         await self.game.get_emojis(self.ctx.client)
         await self.game_state_message() # ingresa al bucle
-        logger.info(f"UNO!: Game Started 💙")
 
     async def game_state_message(self):
         if self.game.status == GameState.WAITING:
@@ -194,7 +193,7 @@ class Main:
             if wait: return await self.end_cycle()
         elif self.game.status == GameState.PLAYING:
             is_current_player_last_card:bool = len(self.game.current_player.hand.cards) == 1
-            self.game_view = GameMenu(timeout=self.game.game_data_config.turn_time,game=self.game)
+            self.game_view = PlayingView(timeout=self.game.game_data_config.turn_time,game=self.game)
 
             ### Check Stackable
             if self.game.game_data_config.stackable and self.game.stack > 0:

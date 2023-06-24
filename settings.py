@@ -7,10 +7,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+MONGO_URI = os.getenv("MONGO_URI")
 DISCORD_API_TOKEN = os.getenv("DISCORD_API_TOKEN")
 
 BASE_DIR = pathlib.Path(__file__).parent
-CMDS_DIR = BASE_DIR / "cmds"
 COGS_DIR = BASE_DIR / "cogs"
 SCMD_DIR = BASE_DIR / "slashcmds"
 TEST_GUILD_ID = discord.Object(id=int(os.getenv("TEST_GUILD_ID")))
