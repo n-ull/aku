@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "aku"
+version = "0.1.0"
+description = "Bot multipropósito enfocado en ofrecer mini-juegos para la comunidad. Proyecto creado para Outlaw's Fortress."
+authors = ["n-ull"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+discord = "^2.3.0"
+python-dotenv = "^1.0.0"
+requests = "^2.31.0"
+pillow = "^9.5.0"
+imagehash = "^4.3.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
