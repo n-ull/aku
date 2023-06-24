@@ -26,8 +26,9 @@ def run():
             if slashcmd_file.name != "__init__.py":
                 await bot.load_extension(f"slashcmds.{group}.{slashcmd_file.name[:-3]}")
 
-        bot.tree.copy_global_to(guild=settings.TEST_GUILD_ID)
-        await bot.tree.sync(guild=settings.TEST_GUILD_ID)
+        for guild in settings.TEST_GUILDS:
+            bot.tree.copy_global_to(guild=guild)
+            await bot.tree.sync(guild=guild)
 
     # @bot.event
     # async def on_thread_delete(thread: discord.Thread):
