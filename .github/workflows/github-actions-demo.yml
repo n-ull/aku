@@ -1,5 +1,5 @@
 name: Style checks
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
+run-name: 🎨💻 Style checks 🎨💻
 on: [push]
 jobs:
   Ruff:
@@ -11,6 +11,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
+          python-version: 3.11
           cache: 'poetry'
       - name: Install dependencies
         run: poetry install
@@ -26,6 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
+          python-version: 3.11
           cache: 'poetry'
       - name: Install dependencies
         run: poetry install
@@ -41,6 +43,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
+          python-version: 3.11
           cache: 'poetry'
       - name: Install dependencies
         run: poetry install
