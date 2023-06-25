@@ -102,7 +102,10 @@ class UNOGame(GameBase):
         self.last_action = (
             f"{self.current_player.name} lose his turn and eat 3 cards, last card is: "
             if self.stack == 0
-            else f"{self.current_player.name} lose his turn and eat 3 cards plus {self.stack} stacked cards, last card is: "
+            else (
+                f"{self.current_player.name} lose his turn and eat 3 cards plus {self.stack} stacked cards, last card"
+                " is: "
+            )
         )
         if self.current_player.warns == 2:
             self.del_player(self.current_player)
@@ -291,8 +294,7 @@ class Main:
             title="UNO Beta",
             color=self.game.graveyard.last_card.color_code,
             description=(
-                f"{self.game.last_action + self.game.graveyard.last_card.name}\n"
-                f"```markdown\n{self.game.player_list}```"
+                f"{self.game.last_action + self.game.graveyard.last_card.name}\n```markdown\n{self.game.player_list}```"
             ),
         )
         embed.set_thumbnail(url=self.game.graveyard.last_card.image_url)

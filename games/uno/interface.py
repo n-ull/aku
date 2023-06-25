@@ -50,7 +50,7 @@ class StartMenu(GameView):
             content=f"> {self.game.add_player(user=interaction.user)}", ephemeral=True
         )
         # if self.game.get_player_by_id(interaction.user.id) != None: return
-        self.embed.description = "Join and play UNO!" f"```markdown\n{self.game.player_list}```"
+        self.embed.description = f"Join and play UNO!```markdown\n{self.game.player_list}```"
         await self.msg.edit(embed=self.embed, view=self)
 
 
