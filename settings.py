@@ -1,16 +1,14 @@
-import discord
 import logging
-import os
 import pathlib
 from logging.config import dictConfig
 
+import discord
 from envsqare import Environment
 from envsqare.casters import ListCaster
 
-
 env = Environment()
 env.read_env()
-env.casters['LIST_INT'] = ListCaster(splitter=',', element_caster=int)
+env.casters["LIST_INT"] = ListCaster(splitter=",", element_caster=int)
 
 
 DEBUG = env.BOOL("DEBUG", True)
@@ -26,9 +24,7 @@ LOGGING_CONFIG = {
     "version": 1,
     "disabled_existing_loggers": False,
     "formatters": {
-        "verbose": {
-            "format": "%(levelname)-10s - %(asctime)s - %(module)-15s : %(message)s"
-        },
+        "verbose": {"format": "%(levelname)-10s - %(asctime)s - %(module)-15s : %(message)s"},
         "standard": {"format": "%(levelname)-10s - %(name)-15s : %(message)s"},
     },
     "handlers": {
@@ -52,11 +48,6 @@ LOGGING_CONFIG = {
     },
     "loggers": {
         "bot": {"handlers": ["console"], "level": logging.DEBUG if DEBUG else logging.INFO, "propagate": False},
-        "discord": {
-            "handlers": ["console2", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
         "game": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "discord": {
             "handlers": ["console"],

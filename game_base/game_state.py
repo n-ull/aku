@@ -1,6 +1,8 @@
-import discord
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
+
+import discord
+
 
 @dataclass
 class GameConfig:
@@ -8,6 +10,7 @@ class GameConfig:
     ctx: discord.Client
     max_players: int = 8
     min_players: int = 1
+
 
 class GameState(Enum):
     WAITING = 1

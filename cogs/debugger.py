@@ -1,15 +1,19 @@
-import discord
 from discord.ext import commands
+
 from game_base import GameState
 from games.uno.card import UnoCard
+
 
 class NotOwner(commands.CheckFailure):
     ...
 
+
 def is_bot_owner():
     async def predicate(ctx):
         return ctx.author.id == 244535132097216512
+
     return commands.check(predicate)
+
 
 class Debugger(commands.Cog):
     def __init__(self, bot):
@@ -36,6 +40,7 @@ class Debugger(commands.Cog):
             player.hand.add_card(UnoCard(card[0], card[1]))
         else:
             await ctx.send(f"{card[0]} {card[1]}")
+
 
 async def setup(bot):
     await bot.add_cog(Debugger(bot))

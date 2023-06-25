@@ -1,6 +1,7 @@
-import discord
+from discord import Interaction, app_commands
+
 from games.blackjack.game import Blackjack, GameView
-from discord import app_commands, Interaction
+
 
 @app_commands.command()
 async def blackjack(ctx: Interaction):
@@ -12,7 +13,7 @@ async def blackjack(ctx: Interaction):
         game = Blackjack(player_id=ctx.user.id, player=ctx.user)
 
         game_message = await ctx.followup.send(embed=game.game_embed(), view=game_view, wait=True)
-        
+
         game_view.message = game_message
         game_view.game = game
 
@@ -21,6 +22,7 @@ async def blackjack(ctx: Interaction):
         print("Blackjack Error")
     finally:
         print("Blackjack finished")
+
 
 async def setup(bot):
     bot.tree.add_command(blackjack)

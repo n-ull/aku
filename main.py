@@ -1,16 +1,17 @@
-import settings
 import discord
-from utils.database import AkuDatabase
 from discord.ext import commands
-from cogs.debugger import Debugger
+
+import settings
+from utils.database import AkuDatabase
 
 logger = settings.logging.getLogger("bot")
 
+
 def run():
-    intents = discord.Intents.default() 
+    intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = commands.Bot(command_prefix="?", intents=intents, help_command= None)
+    bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
     bot.games: dict = dict()
     bot.db = AkuDatabase(settings.MONGO_URI)
 
@@ -20,7 +21,7 @@ def run():
 
         await bot.load_extension("cogs.debugger")
         await bot.change_presence(activity=discord.Game(name="Python Version"))
-        
+
         for slashcmd_file in settings.SCMD_DIR.rglob("*.py"):
             group = slashcmd_file.parent.name
             if slashcmd_file.name != "__init__.py":
@@ -36,6 +37,7 @@ def run():
     #         await bot.games[thread.guild.id].thread_deleted()
 
     bot.run(settings.DISCORD_API_TOKEN, root_logger=True)
+
 
 if __name__ == "__main__":
     run()
