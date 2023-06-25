@@ -31,8 +31,8 @@ jobs:
           cache: 'poetry'
       - name: Install dependencies
         run: poetry install
-      - name: Lint with ruff
-        run: poetry run isort .
+      - name: Run isort
+        run: poetry run isort -c .
 
   Black:
     runs-on: ubuntu-latest
@@ -47,5 +47,5 @@ jobs:
           cache: 'poetry'
       - name: Install dependencies
         run: poetry install
-      - name: Lint with ruff
-        run: poetry run black .
+      - name: Run black
+        run: poetry run black --check .
