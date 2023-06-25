@@ -7,7 +7,7 @@ from discord import Member
 import settings
 
 # game imports
-from game_base import *
+from game_base import GameBase, GameConfig, GameState, Player
 
 from .card import UnoCard
 from .card_collection import UnoDeck, UnoHand

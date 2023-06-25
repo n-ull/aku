@@ -18,8 +18,8 @@ async def uno(ctx: discord.Interaction, randomize: int = 0):
             return await ctx.response.send_message("Can't open another game in the same guild.")
         main = Main(ctx=ctx, randomize=randomize == 0)
         await main.start()
-    except:
-        logger.warning("UNO: AN EXCEPTION OCCURRED")
+    except Exception as e:
+        logger.exception(f"UNO: AN EXCEPTION OCCURRED: {e}")
     finally:
         # logger.info("UNO GAME ENDED! CLEANING...")
         result_embed: discord.Embed = discord.Embed(title=f"UNO! {ctx.user.display_name} finished:")
@@ -36,7 +36,7 @@ async def uno(ctx: discord.Interaction, randomize: int = 0):
             result_embed.description = (
                 f"The winner is: {main.game.winner.name}\n"
                 f"{main.game.winner.name} won a total of {user_db['wins']} games.\n"
-                f"Win rate: {(user_db['wins']/user_db['games'])*100}%"
+                f"Win rate: {(user_db['wins'] / user_db['games']) * 100}%"
             )
             result_embed.color = main.game.graveyard.last_card.color_code
             result_embed.set_thumbnail(url=main.game.graveyard.last_card.image_url)

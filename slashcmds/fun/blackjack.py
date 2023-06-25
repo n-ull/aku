@@ -18,8 +18,8 @@ async def blackjack(ctx: Interaction):
         game_view.game = game
 
         await game_view.wait()
-    except:
-        print("Blackjack Error")
+    except Exception as e:
+        print(f"Blackjack Error: {e}")
     finally:
         print("Blackjack finished")
 
