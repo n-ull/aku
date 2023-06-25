@@ -14,6 +14,14 @@ def run():
     bot.games: dict = dict()
     bot.db = AkuDatabase(settings.MONGO_URI)
 
+    # TODO: No funciona    
+    @bot.tree.error
+    async def on_app_command_error(interaction: discord.Interaction, error):
+        if isinstance(error, commands.BotMissingPermissions):
+            await interaction.response.send_message(content=error, ephemeral=True)
+        else:
+            raise error
+
     @bot.event
     async def on_ready():
         logger.info(f"User: {bot.user} (ID: {bot.user.id})")
@@ -25,16 +33,8 @@ def run():
             group = slashcmd_file.parent.name
             if slashcmd_file.name != "__init__.py":
                 await bot.load_extension(f"slashcmds.{group}.{slashcmd_file.name[:-3]}")
-                    
-        @bot.tree.error
-        async def on_app_command_error(interaction: discord.Interaction, error):
-            if isinstance(error, commands.BotMissingPermissions):
-                await interaction.response.send_message(contnet=error, ephemeral=True)
-            else:
-                raise error
 
         await bot.tree.sync()
-
     # @bot.event
     # async def on_thread_delete(thread: discord.Thread):
     #     if thread.guild.id in bot.games and thread.id == bot.games[thread.guild.id].game.thread.id:
