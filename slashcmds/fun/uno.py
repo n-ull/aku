@@ -5,12 +5,13 @@ from discord import app_commands
 logger = settings.logging.getLogger("game")
 
 @app_commands.command()
+@app_commands.guild_only()
 @app_commands.describe(randomize="Randomize player list at start?")
 @app_commands.choices(randomize=[
     app_commands.Choice(name="True", value=1),
     app_commands.Choice(name="False", value=0)
 ])
-@app_commands.guild_only()
+@app_commands.checks.bot_has_permissions(manage_threads=True, send_messages_in_threads=True)
 async def uno(ctx: discord.Interaction, randomize: int = 0):
     """Lose all your friends."""
     try:
@@ -20,7 +21,6 @@ async def uno(ctx: discord.Interaction, randomize: int = 0):
     except:
         logger.warn("UNO: AN EXCEPTION OCCURRED")
     finally:
-        # logger.info("UNO GAME ENDED! CLEANING...")
         result_embed: discord.Embed = discord.Embed(title=f"UNO! {ctx.user.display_name} finished:")
         if main.game.status.name != "FINISHED":
             result_embed.description = "Game has been cancelled."
