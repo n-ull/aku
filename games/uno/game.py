@@ -247,7 +247,6 @@ class Main:
         ctx.client.games[ctx.guild_id] = self
         
     async def game_menu_message(self, ctx: discord.Interaction, view: GameView):
-        if not self.game.thread: return
         embed = discord.Embed(title="UNO Beta", color=self.game.graveyard.last_card.color_code, description=(
             f"Join and play UNO!\n{self.game.last_action + self.game.graveyard.last_card.name}\n"
             f"```markdown\n{self.game.player_list}```"
