@@ -29,15 +29,34 @@ ___
 | No Thanks! | ❌
 | PK Showdown | ❌
 
+## Dependencias
+___
+1. [Python](https://www.python.org/): 3.10+
+2. [Poetry](https://python-poetry.org/)
+3. [Conexión a internet 🤓](https://i.ytimg.com/vi/OjrZ_HVj48c/maxresdefault.jpg)
+
 ## ¿Cómo instalarlo?
 ___
-1. Crear un archivo ".env" 
-1. Configurar `Token` y tu `Mongo URI`:
-```env
-TOKEN="Inserta tu token aquí"
+1. Crear un archivo `.env` en base al `.env.template`: `cp .env.template .env`
+1. Configurar `DISCORD_API_TOKEN`, `MONGO_URI` y `TEST_GUILD_IDS`:
+
+```bash
+DISCORD_API_TOKEN="Inserta tu token aquí"
 MONGO_URI="Inserta tu URI aquí"
+TEST_GUILD_IDS="ID_GUILD_1,ID_GUILD_2,ID_GUILD_3"
 ```
 
+3. Instalar las dependencias (*Requisito: tener instalado Poetry y una versión de Python>=3.10*):
+
+```bash
+poetry install
+```
+
+4. Iniciar el cliente:
+
+```bash
+poetry run python main.py
+```
 
 ## Code Style
 ___
