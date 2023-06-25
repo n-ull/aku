@@ -15,6 +15,14 @@ def run():
     bot.games: dict = dict()
     bot.db = AkuDatabase(settings.MONGO_URI)
 
+    # TODO: No funciona
+    @bot.tree.error
+    async def on_app_command_error(interaction: discord.Interaction, error):
+        if isinstance(error, commands.BotMissingPermissions):
+            await interaction.response.send_message(content=error, ephemeral=True)
+        else:
+            raise error
+
     @bot.event
     async def on_ready():
         logger.info(f"User: {bot.user} (ID: {bot.user.id})")
@@ -29,7 +37,7 @@ def run():
 
         for guild in settings.TEST_GUILDS:
             bot.tree.copy_global_to(guild=guild)
-            await bot.tree.sync(guild=guild)
+            await bot.tree.sync()
 
     # @bot.event
     # async def on_thread_delete(thread: discord.Thread):

@@ -6,6 +6,7 @@ from utils.progress_bar import ProgressBar
 
 
 @app_commands.command()
+@app_commands.guild_only()
 @app_commands.describe(user="Tu nobio")
 async def gay(ctx: Interaction, user: discord.Member | None):
     """Revisa que tan gay eres tú o tu novio."""
@@ -16,8 +17,10 @@ async def gay(ctx: Interaction, user: discord.Member | None):
     gay_level: int = calculate_image_hash_from_url(user.avatar) % 100
 
     embed = Embed()
-    embed.set_author(name="Gayometer", icon_url=user.avatar)
-    embed.add_field(name="El nivel de homosexualidad de este usuario:", value=progress_bar.show_progress(gay_level))
+    embed.set_author(name=f"Gay-o-meter - {user.display_name}", icon_url=user.avatar)
+    embed.add_field(
+        name=f"El nivel de homosexualidad de {user.display_name}:", value=progress_bar.show_progress(gay_level)
+    )
 
     if gay_level == 0:
         embed.set_image(url="https://i.pinimg.com/originals/7f/2e/19/7f2e190365fde21a51610bf8c905fc9c.jpg")

@@ -294,7 +294,8 @@ class Main:
             title="UNO Beta",
             color=self.game.graveyard.last_card.color_code,
             description=(
-                f"{self.game.last_action + self.game.graveyard.last_card.name}\n```markdown\n{self.game.player_list}```"
+                f"Join and play UNO!\n{self.game.last_action + self.game.graveyard.last_card.name}\n"
+                f"```markdown\n{self.game.player_list}```"
             ),
         )
         embed.set_thumbnail(url=self.game.graveyard.last_card.image_url)
