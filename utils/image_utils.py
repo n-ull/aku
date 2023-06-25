@@ -1,7 +1,9 @@
+from io import BytesIO
+
+import imagehash
 import requests
 from PIL import Image
-from io import  BytesIO
-import imagehash
+
 
 def calculate_image_hash_from_url(image_url):
     response = requests.get(image_url)
