@@ -25,9 +25,15 @@ def run():
             group = slashcmd_file.parent.name
             if slashcmd_file.name != "__init__.py":
                 await bot.load_extension(f"slashcmds.{group}.{slashcmd_file.name[:-3]}")
+                    
+        @bot.tree.error
+        async def on_app_command_error(interaction: discord.Interaction, error):
+            if isinstance(error, commands.BotMissingPermissions):
+                await interaction.response.send_message(contnet=error, ephemeral=True)
+            else:
+                raise error
 
-        bot.tree.copy_global_to(guild=settings.TEST_GUILD_ID)
-        await bot.tree.sync(guild=settings.TEST_GUILD_ID)
+        await bot.tree.sync()
 
     # @bot.event
     # async def on_thread_delete(thread: discord.Thread):
