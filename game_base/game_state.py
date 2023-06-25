@@ -7,7 +7,7 @@ class GameConfig:
     owner: discord.Member
     ctx: discord.Client
     max_players: int = 8
-    min_players: int = 1
+    min_players: int = 2
 
 class GameState(Enum):
     WAITING = 1
