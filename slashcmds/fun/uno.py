@@ -21,8 +21,7 @@ async def uno(ctx: discord.Interaction, randomize: int = 0):
     except:
         print("An error occurred")
     finally:
-        await ctx.edit_original_response(view=None)
-        print("Started")
+        print("UNO command ended")
         # if start_menu.foo == None: print("Timedout")
         # if start_menu.foo == True: 
             # Comenzar el juego
