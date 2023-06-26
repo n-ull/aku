@@ -14,5 +14,5 @@ class CardCollection:
         self.cards.extend(cards)
 
     @property
-    def last_card(self):
+    def last_card(self) -> Card:
         return self.cards[-1]

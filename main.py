@@ -2,7 +2,7 @@ import settings
 import discord
 from utils.database import AkuDatabase
 from discord.ext import commands
-from cogs.debugger import Debugger
+# from cogs.debugger import Debugger
 
 logger = settings.logging.getLogger("bot")
 
@@ -14,19 +14,12 @@ def run():
     bot.games: dict = dict()
     bot.db = AkuDatabase(settings.MONGO_URI)
 
-    # TODO: No funciona    
-    @bot.tree.error
-    async def on_app_command_error(interaction: discord.Interaction, error):
-        if isinstance(error, commands.BotMissingPermissions):
-            await interaction.response.send_message(content=error, ephemeral=True)
-        else:
-            raise error
-
     @bot.event
     async def on_ready():
         logger.info(f"User: {bot.user} (ID: {bot.user.id})")
 
         await bot.load_extension("cogs.debugger")
+        # await bot.load_extension("cogs.game_manager")
         await bot.change_presence(activity=discord.Game(name="Python Version"))
         
         for slashcmd_file in settings.SCMD_DIR.rglob("*.py"):
@@ -40,7 +33,7 @@ def run():
     #     if thread.guild.id in bot.games and thread.id == bot.games[thread.guild.id].game.thread.id:
     #         await bot.games[thread.guild.id].thread_deleted()
 
-    bot.run(settings.DISCORD_API_TOKEN, root_logger=True)
+    bot.run("MTEwNDI3MDA1NDc5MjYzODUyNQ.GTUbJV.KYpjW2Kz450RpVUMQFOSEyKYLej3i_OUZD2Zbw", root_logger=True)
 
 if __name__ == "__main__":
     run()

@@ -32,7 +32,7 @@ class StartMenu(GameView):
     @discord.ui.button(label="Start", style=discord.ButtonStyle.primary, custom_id="start")
     async def start(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        if interaction.user.id != self.game.game_data_config.owner.id:
+        if interaction.user.id != self.game.data.owner.id:
             # TODO: esto figura como que ya está respondido por el defer anterior
             await interaction.followup.send(content="> You cannot start this game.", ephemeral=True, wait=False)
             return
