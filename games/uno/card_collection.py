@@ -46,7 +46,9 @@ class UnoHand(CardCollection):
         cards: list[UnoCard] = []
         for card in self.cards:
             if card.validate(last_card): cards.append(card)
+        print(f"Generated valid hand: {cards}")
         return cards
+    
     def generate_plus_hand(self):
         cards: list[UnoCard] = []
         for card in self.cards:

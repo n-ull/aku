@@ -1,9 +1,11 @@
 import asyncio
 import random
-from threading import Timer
-from typing import Optional
+from typing import Optional, Union
 import discord
 from discord import Member
+from discord.emoji import Emoji
+from discord.enums import ButtonStyle
+from discord.partial_emoji import PartialEmoji
 import settings
 from dataclasses import dataclass
 
@@ -12,16 +14,35 @@ from game_base import *
 from utils.to_thread import to_thread
 from .card_collection import UnoHand, UnoDeck
 from .card import UnoCard
-from .interface import GameView, StartMenu, PlayingView, StackDrawItem
+from .interface import CardSelectComponent, GameView, StartMenu, PlayingView, StackDrawItem
 
 logger = settings.logging.getLogger("game")
+
+class TurnTimer:
+    def __init__(self, time, async_func):
+        self.time = time
+        self.async_func = async_func
+        self.task = None
+
+    async def _run_timer(self):
+        await asyncio.sleep(self.time)
+        await self.async_func()
+
+    def start(self):
+        loop = asyncio.get_event_loop()
+        self.task = loop.create_task(self._run_timer())
+
+    def cancel(self):
+        if self.task:
+            self.task.cancel()
+
 
 @dataclass
 class UnoGameConfig(GameConfig):
     stackable: bool = True
     effect_win: bool = True
     randomize_players: bool = False
-    turn_time: float = 180
+    turn_time: float = 20
 
 class UnoPlayer(Player):
     def __init__(self, user: discord.Member) -> None:
@@ -40,7 +61,7 @@ class UNOGame(GameBase):
         self.winner: Player | None = None
         self.last_action: str = "Game started with: "
         self.stack: int = 0
-        self.timer : Timer | None = None
+        self.timer : TurnTimer | None = None
         self.player_turn_view: PlayerTurnView = None
 
     async def get_emojis(self) -> list[discord.Emoji]:
@@ -62,7 +83,7 @@ class UNOGame(GameBase):
         self.players.append(UnoPlayer(user))
         return f"{user.display_name} joined the game succesfully."
 
-    def start_game(self):
+    async def start_game(self):
         if self.status != GameState.WAITING: raise Exception("Game already started...")
         if len(self.players) < self.data.min_players: raise Exception(f"Minimum of players is {self.data.min_players}")
 
@@ -79,7 +100,7 @@ class UNOGame(GameBase):
         self.graveyard.add_card(self.deck.pop_card())
 
         self.status = GameState.PLAYING
-        self.set_turn_timer()
+        # await self.set_turn_timer()
 
     """
     Changes the current_index value, can't be higher than the length of the players list.
@@ -92,11 +113,13 @@ class UNOGame(GameBase):
         else:
             self.current_player_index = (self.current_player_index - 1 + len(self.players)) % len(self.players)
 
-        self.set_turn_timer()
+        # await self.set_turn_timer()
         await self.msg_handler.send_status_message()
+        await self.clean_view()
         self.check_win()
     
     async def punish_user(self):
+        print(f"Punish user action: {self.current_player.name}")
         self.last_action = f"{self.current_player.name} lose his turn and eat 3 cards, last card is: " if self.stack == 0 else f"{self.current_player.name} lose his turn and eat 3 cards plus {self.stack} stacked cards, last card is: "
         if self.current_player.warns == 2:
             self.del_player(self.current_player)
@@ -110,13 +133,16 @@ class UNOGame(GameBase):
             logger.info(f"User punished: {self.current_player.name} has {self.current_player.warns} warns")
             await self.skip_turn()
 
-    def set_turn_timer(self):
-        self.timer = Timer(self.data.turn_time, self.on_turn_timeout)
+    async def set_turn_timer(self):
+        self.timer = TurnTimer(self.data.turn_time, self.on_turn_timeout)
         self.timer.start()
 
-    def on_turn_timeout(self):
-        self.punish_user()
+    async def on_turn_timeout(self):
+        await self.punish_user()
+
+    async def clean_view(self):
         if self.player_turn_view is not None:
+            await self.player_turn_view.clean_options()
             self.player_turn_view.stop()
             self.player_turn_view = None
 
@@ -146,7 +172,7 @@ class UNOGame(GameBase):
         print("Play card")
 
         if card.has_effect or card.value == "+4":
-            card.effect.execute(game=self)
+            await card.effect.execute(game=self)
 
         # play process
         player.hand.del_card(card)
@@ -197,23 +223,60 @@ class UNOGame(GameBase):
         return self.graveyard.last_card
 
 ###################################################################################################
-class PlayerTurnView(discord.ui.View):
+class ThrowButton(discord.ui.Button):
+    def __init__(self, *, style: discord.ButtonStyle = discord.ButtonStyle.secondary, label: str | None = None, disabled: bool = False, custom_id: str | None = None, url: str | None = None, emoji: str | discord.Emoji | discord.PartialEmoji | None = None, row: int | None = None, card):
+        super().__init__(style=style, label=label, disabled=disabled, custom_id=custom_id, url=url, emoji=emoji, row=row)
+        self.card = card
 
-    is_played: bool = False
+    async def callback(self, interaction: discord.Interaction):
+        print("and threw it.")
+        game: UNOGame = self.view.game
+        current_player = game.get_player_by_id(interaction.user.id)
+        game.last_action = f"{game.current_player.name} picked up a card and threw it, last card is: "
+        await game.play_card(card=self.card.id, player=current_player)
+        self.view.stop()
+
+
+class KeepButton(discord.ui.Button):
+    async def callback(self, interaction: discord.Interaction):
+        game: UNOGame = self.view.game
+        game.last_action = f"{game.current_player.name} picked up a card, last card is: "
+        await game.skip_turn()
+        self.view.stop()
+
+class PlayerTurnView(discord.ui.View):
 
     def __init__(self, *, timeout: float | None = 180, game):
         super().__init__(timeout=timeout)
         self.game: UNOGame = game
         self.msg: discord.WebhookMessage = None
         self.generate_hand()
+
+    is_played: bool = False
+
+    async def on_timeout(self):
+        await self.msg.edit(view=None)
+
+    async def clean_options(self):
+        await self.msg.edit(view=None)
+
+    async def add_wild_color_options(self):
+        ...
+
+    async def add_throw_or_keep_options(self, card, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.clear_items()
+        self.add_item(ThrowButton(label="Throw", card=card))
+        self.add_item(KeepButton(label="Keep"))
+        await self.msg.edit(view=self)
     
     def generate_hand(self):
         valid_hand = self.game.current_player.hand.generate_valid_hand(self.game.last_card)
-        if self.game.stack > 0:
-            # genera la mano de +2
-            ...
-        elif len(self.game.current_player.hand.cards) != 0:
-            card_select_menu = discord.ui.Select(custom_id="send_card", options=[])
+        # if self.game.stack > 0:
+        #     # genera la mano de +2
+        #     ...
+        if len(valid_hand) != 0:
+            card_select_menu = CardSelectComponent(custom_id="send_card", options=[], game=self.game, cards=valid_hand)
             for card in valid_hand:
                 item = discord.SelectOption(label=f"{card.name}", value=card.id, emoji=card.color_emoji)
                 card_select_menu.append_option(item)
@@ -221,18 +284,17 @@ class PlayerTurnView(discord.ui.View):
 
     @discord.ui.button(label="Draw")
     async def draw_card(self, interaction: discord.Interaction, button):
-        card = await self.game.draw_card(self.game.current_player)
+        this_player = self.game.get_player_by_id(interaction.user.id)
+        card = await self.game.draw_card(this_player)
+        await self.msg.edit(content=f"{this_player.hand.emoji_hand(self.game.emoji_collection)}")
         print(f"{self.game.current_player.name} picked up {card.name}")
         if card.validate(self.game.last_card) and not card.is_wild:
-            # you may throw it
-            await self.game.skip_turn()
+            await self.add_throw_or_keep_options(card=card, interaction=interaction)
         else:
             print('\nand keep it')
-            self.is_played = True
             self.game.last_action = f"{self.game.current_player.name} picked up a card, last card is: "
             await self.game.skip_turn()
-        self.stop()
-
+            self.stop()
 
 ########### GAME MESSAGE HANDLER:
 class HandButton(discord.ui.Button):
@@ -241,11 +303,17 @@ class HandButton(discord.ui.Button):
         player: UnoPlayer = game.get_player_by_id(interaction.user.id)
         if player is None: return await interaction.response.send_message(content="You're not even playing...", ephemeral=True)
         if self.view.game.current_player == player:
+
+            if game.player_turn_view is not None:
+                print("Get hand again with the same options")
+                await game.clean_view()
+
             await interaction.response.defer()
             # valid_hand = player.hand.generate_valid_hand(game.last_card)
             game.player_turn_view: PlayerTurnView = PlayerTurnView(game=game) # view con selector de cartas
+            actual_view = game.player_turn_view
             hand_message = await interaction.followup.send(content=f"{player.hand.emoji_hand(game.emoji_collection)}", view=game.player_turn_view, ephemeral=True)
-            game.player_turn_view.msg = hand_message
+            actual_view.msg = hand_message
             await game.player_turn_view.wait()
             game.player_turn_view = None
         else:
@@ -281,7 +349,7 @@ class StartMenuView(discord.ui.View):
     @discord.ui.button(label="Start", custom_id="start")
     async def start_button(self, interaction: discord.Interaction, button):
         if interaction.user.id == self.game.players[0].id:
-            self.game.start_game()
+            await self.game.start_game()
             await self.game.get_emojis()
             await self.game.msg_handler.send_status_message()
             self.stop()
