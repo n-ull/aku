@@ -4,8 +4,9 @@ from dataclasses import dataclass
 
 @dataclass
 class GameConfig:
-    owner: discord.Member
-    ctx: discord.Client
+    client: discord.Client
+    thread: discord.Thread
+    owner = None
     max_players: int = 8
     min_players: int = 2
 

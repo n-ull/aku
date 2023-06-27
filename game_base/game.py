@@ -1,21 +1,22 @@
 from random import shuffle
-from discord import Member
+from discord import Member, TextChannel
 from .game_state import GameState, GameConfig
 from .player import Player
 
 class GameBase:
     def __init__(self, data: GameConfig) -> None:
-        self.players: list[Player] = [Player(data.owner)]
+        self.players: list[Player] = []
         self.current_player_index: int = 0
         self.is_clockwise: bool = True
-        self.game_data_config: GameConfig = data
+        self.data: GameConfig = data
+        self.thread: TextChannel = data.thread #TODO: Change to Thread
         self.status: GameState = GameState.WAITING
 
     def add_player(self, user: Member):
         # check if can add
         if self.status == GameState.PLAYING: return
         if user.id in [p.id for p in self.players]: return f"You are already in the game..."
-        if len(self.players) == self.game_data_config.max_players: return f"Maximum players: {self.game_data_config.max_players}"
+        if len(self.players) == self.data.max_players: return f"Maximum players: {self.data.max_players}"
 
         self.players.append(Player(user))
         return f"{user.display_name} joined the game succesfully."
@@ -26,10 +27,19 @@ class GameBase:
     
     def start_game(self): ...
 
-    def skip_turn(self): ...
+    async def skip_turn(self): ...
 
-    def punish_user(self): ...
-
+    async def warn_player(self, func = None):
+        if self.current_player.warns == 2:
+            self.del_player(self.current_player)
+            if len(self.players) == 1:
+                self.status = GameState.CANCELLED
+        else:
+            self.current_player.warns += 1
+            if func is not None:
+                func()
+            await self.skip_turn()
+    
     def randomize_players(self):
         shuffle(self.players)
 

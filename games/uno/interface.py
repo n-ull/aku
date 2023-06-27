@@ -32,7 +32,7 @@ class StartMenu(GameView):
     @discord.ui.button(label="Start", style=discord.ButtonStyle.primary, custom_id="start")
     async def start(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        if interaction.user.id != self.game.game_data_config.owner.id:
+        if interaction.user.id != self.game.data.owner.id:
             # TODO: esto figura como que ya está respondido por el defer anterior
             await interaction.followup.send(content="> You cannot start this game.", ephemeral=True, wait=False)
             return
@@ -97,17 +97,14 @@ class StackDrawItem(discord.ui.Button):
 class CardSelectItem(discord.SelectOption):
     ...
 
-class CardSelectView(discord.ui.Select):
+class CardSelectComponent(discord.ui.Select):
     def __init__(self, *, custom_id: str = ..., placeholder: str | None = None, min_values: int = 1, max_values: int = 1, options: List[discord.SelectOption] = ..., disabled: bool = False, row: int | None = None, cards: list[UnoCard], game: GameBase) -> None:
         super().__init__(custom_id=custom_id, placeholder=placeholder, min_values=min_values, max_values=max_values, options=options, disabled=disabled, row=row)
-        self.cards: list[UnoCard] = cards
         self.game: GameBase = game
-        for card in cards:
-            item = CardSelectItem(label=f"{card.name}", value=f"{card.id}", emoji=card.color_emoji)
-            self.append_option(option=item)
 
     # send the card item value to the game, the game will search for the card in the hand and send it to graveyard.
     async def callback(self, interaction: discord.Interaction):
+        self.view.is_played = True
         card_id = interaction.data.get('values')[0]
         player = self.game.get_player_by_id(interaction.user.id)
         the_actual_card=player.hand.get_card_by_id(card_id)
@@ -117,9 +114,7 @@ class CardSelectView(discord.ui.Select):
             await interaction.response.send_message(content="> Select a new color, you have 60 seconds.", view=wild_view, ephemeral=True)
             await wild_view.wait()
 
-        card: UnoCard | None = await self.game.play_card(player, card_id)
-        self.view.stop()
-
+        card: UnoCard = await self.game.play_card(player, card_id)
 
 class CardSelect(GameView):
     def __init__(self, *, timeout: float | None = 180, game, game_view: GameView, card_list: list[UnoCard] | None):
@@ -129,7 +124,7 @@ class CardSelect(GameView):
     
     async def generate_hand(self):
         if self.card_list == None: return
-        valid_hand = CardSelectView(custom_id="send_card", cards=self.card_list, options=[], game=self.game)
+        valid_hand = CardSelectComponent(custom_id="send_card", cards=self.card_list, options=[], game=self.game)
         self.add_item(valid_hand)
 
     """Chequea si es turno del usuario que interactuó"""
@@ -168,7 +163,7 @@ class DrawSelectView(GameView):
 class PlayingView(GameView):
     def __init__(self, *, timeout: float | None = 180, game):
         super().__init__(timeout=timeout, game=game)
-        self.card_select_view: CardSelectView | None = None
+        self.card_select_view: CardSelectComponent | None = None
         self.draw_select_view: DrawSelectView | None = None
         self.hand_message: discord.WebhookMessage | None = None
     
@@ -186,7 +181,8 @@ class PlayingView(GameView):
     async def hand(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.game.get_player_by_id(interaction.user.id) # obtain player from the list
         if player == self.game.players[self.game.current_player_index]:
-            if self.hand_message is not None: await self.hand_message.edit(view=None)
+
+        
             valid_hand = player.hand.generate_valid_hand(last_card=self.game.graveyard.last_card)
             emoji_hand = player.hand.emoji_hand(self.game.emoji_collection)
 

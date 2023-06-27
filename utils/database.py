@@ -21,5 +21,5 @@ class AkuDatabase:
             upsert=True
         )
     
-    async def uno_wins(self, user_id: int):
+    async def user(self, user_id: int) -> dict:
         return self.user_collection.find_one({"id": user_id})
