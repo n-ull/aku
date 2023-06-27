@@ -27,9 +27,9 @@ class GameBase:
     
     def start_game(self): ...
 
-    def skip_turn(self): ...
+    async def skip_turn(self): ...
 
-    def warn_player(self, func = None):
+    async def warn_player(self, func = None):
         if self.current_player.warns == 2:
             self.del_player(self.current_player)
             if len(self.players) == 1:
@@ -38,10 +38,8 @@ class GameBase:
             self.current_player.warns += 1
             if func is not None:
                 func()
-            self.skip_turn()
+            await self.skip_turn()
     
-    def punish_user(self): ...
-
     def randomize_players(self):
         shuffle(self.players)
 

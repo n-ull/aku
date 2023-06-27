@@ -1,6 +1,6 @@
-from math import floor
 import random
 import discord
+from math import floor
 from game_base import GameBase
 from typing import Tuple
 
@@ -10,8 +10,46 @@ from typing import Tuple
 
 GAME_START_EMBED = discord.Embed().set_author(name="<< UNO GAME NOT STARTED >>")
 GAME_STATUS_EMBED = discord.Embed().set_author(name="<< UNO GAME STATE MESSAGE>>")
+GAME_END_EMBED = discord.Embed().set_author(name="<< UNO GAME ENDED >>")
+GAME_CANCELED_EMBED = discord.Embed().set_author(name="<< UNO GAME CANCELLED >>")
 
 ##########################
+
+class WildColorSelector(discord.ui.View):
+    foo: bool = False
+
+    def __init__(self, *, timeout: float | None = 60, card):
+        super().__init__(timeout=timeout)
+        self.card = card
+
+    @discord.ui.button(emoji="🔴")
+    async def red_button(self, interaction: discord.Interaction, button):
+        await interaction.response.defer()
+        self.foo = True
+        self.card.color = "R"
+        self.stop()
+
+    @discord.ui.button(emoji="🟢")
+    async def green_button(self, interaction: discord.Interaction, button):
+        await interaction.response.defer()
+        self.foo = True
+        self.card.color = "G"
+        self.stop()
+
+    @discord.ui.button(emoji="🔵")
+    async def blue_button(self, interaction: discord.Interaction, button):
+        await interaction.response.defer()
+        self.foo = True
+        self.card.color = "B"
+        self.stop()
+
+    @discord.ui.button(emoji="🟡")
+    async def yellow_button(self, interaction: discord.Interaction, button):
+        await interaction.response.defer()
+        self.foo = True
+        self.card.color = "Y"
+        self.stop()
+
 
 class DrawOrThrowView(discord.ui.View):
     foo: bool = False
@@ -37,20 +75,27 @@ class CardSelector(discord.ui.Select):
         # check if card is wild and wait for selection
         if card.is_wild:
             colors = ["R", "Y", "G", "B"] # select a random color if the player doesn't select
-            card.color = random.choice(colors)
-            
+            self.view.second_action = True
+            self.view.children_view = WildColorSelector(card=card)
+            await interaction.response.send_message(content="Select a color for your WILD, you have 60 seconds.", view=self.view.children_view,ephemeral=True)
+            await self.view.children_view.wait()
+
+            if not self.view.children_view.foo: card.color = random.choice(colors) # if player didn't select a color...
+
+            self.view.second_action = False
 
         # play card
-        self.view.game.play_card(player, card_id)
+        await self.view.game.play_card(player, card_id)
 
         # close turn options view
-        await self.view.close_view()
+        if not self.view.foo:
+            await self.view.close_view()
 
 class DrawButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         # if custom id stack resolve, resolve stack...
         if interaction.data.get('custom_id') == "stack_resolve":
-            self.view.game.stack_resolve()
+            await self.view.game.stack_resolve()
         else:
             # grab a card
             card = self.view.game.draw_card(self.view.game.current_player)
@@ -60,16 +105,23 @@ class DrawButton(discord.ui.Button):
                 self.children_view = DrawOrThrowView(timeout=60)
                 await interaction.response.send_message(content=f"Do you want to keep `[{card.name}]` {card.emoji} or play it?", ephemeral=True, view= self.children_view)
                 await self.children_view.wait()
-                self.view.second_action = False
-
+                
                 if self.children_view.foo:
-                    self.view.game.play_card(self.view.game.current_player, card.id, False)
+                    await self.view.game.play_card(self.view.game.current_player, card.id, False)
+                    self.view.game.last_action = f"{self.view.game.current_player.name} draw a card an played it: "
 
+                self.view.second_action = False
+                self.view.children_view = None
+
+            self.view.game.last_action = f"{self.view.game.current_player.name} draw a card, the last card is: "
         # if not just pass and close the view
-        self.view.game.skip_turn()
-        await self.view.close_view()
+        if not self.view.foo: 
+            self.view.game.skip_turn()
+            await self.view.close_view()
 
 class TurnOptionsView(discord.ui.View):
+    foo: bool = False # tells me if the view is being closed, avoiding trying to close it again
+
     def __init__(self, *, timeout: float | None = None, game: GameBase, mother_view):
         super().__init__(timeout=timeout)
         self.ephemeral_message: discord.WebhookMessage = None
@@ -82,12 +134,19 @@ class TurnOptionsView(discord.ui.View):
     # concludes the turn and send a new turn message
     async def close_view(self):
         # edit ephemeral message with new content? for draw and reflect the changes on your hand
+        foo = True  
         await self.ephemeral_message.edit(content=f"{self.game.last_player.hand.emoji_hand(self.game.emoji_collection)}",view=None)
         if self.ephemeral_message is not None: self.ephemeral_message = None # deletes the hand message webhook
-        if self.children_view is not None: self.children_view = None # stop children view in case of a second option
+        if self.children_view is not None: self.children_view.stop() # stop children view in case of a second option
         self.mother_view.last_hand_msg = None
         self.mother_view.opened = False
-        await self.game.message_handler.send_status_message(view=self.mother_view)
+
+        if self.game.status.name == "PLAYING":
+            new_view = await self.game.message_handler.create_new_menu(HandButton(label="Hand", custom_id="hand_button"))
+            await self.game.message_handler.send_status_message(view=new_view)
+        else:
+            self.mother_view.stop()
+            await self.game.message_handler.send_results()
         self.stop()
     
     def build_turn_menu(self):
@@ -148,13 +207,9 @@ class HandButton(discord.ui.Button):
 class PlayerTurnView(discord.ui.View):
     # Si el turno del jugador termina...
     async def on_timeout(self):
-        self.clean_hand_message()
-        await self.game.punish_user()
-
-    async def clean_hand_message(self):
-        # Si el jugador ya abrió su mano:
-        if self.turn_options_view is not None:
-            await self.turn_options_view.close_view()
+        if self.game is not None: 
+            if self.game.status.name == "PLAYING": 
+                await self.game.punish_user()
 
     def __init__(self, *, timeout: float | None = 180, game: GameBase):
         super().__init__(timeout=timeout)
@@ -175,17 +230,18 @@ class PlayerTurnView(discord.ui.View):
 class GameDiscordInterface:
     def __init__(self, game: GameBase) -> None:
         self.game = game
-        self.thread : discord.TextChannel = game.thread # change to discord.Thread
+        self.thread : discord.Thread = game.thread # change to discord.Thread
+        self.last_view: discord.ui.View | None = None # this is for closing the game at the end
     
     async def send_status_message(self, view: discord.ui.View | None = None):
         GAME_STATUS_EMBED.description = (
-            f"{self.game.last_action} {self.game.last_card}\n"
+            f"{self.game.last_action} `[{self.game.last_card.name}]`\n"
             f"```md\n{self.game.player_list}```"
         )
         GAME_STATUS_EMBED.color = self.game.last_card.color_code
         GAME_STATUS_EMBED.set_thumbnail(url=self.game.last_card.image_url)
         GAME_STATUS_EMBED.set_footer(text=f"You have {floor(self.game.data.turn_time / 60)} minutes to play.")
-
+        self.last_view = view # save the last view used.
         await self.thread.send(embed=GAME_STATUS_EMBED, view=view)
 
 
@@ -195,3 +251,24 @@ class GameDiscordInterface:
             player_turn_menu.add_item(button)
         return player_turn_menu
 
+    async def send_results(self):
+        self.last_view.stop()
+        if self.game.status.name == "CANCELLED":
+            await self.thread.parent.send(embed=GAME_CANCELED_EMBED)
+        if self.game.status.name == "FINISHED":
+            for player in self.game.players:
+                await self.game.data.client.db.add_uno_game(user_id=player.id)
+
+            await self.game.data.client.db.add_uno_win(user_id=self.game.winner.id) # ADD UNO WIN POINT TO THE WINNER
+
+            DB_USER = await self.game.data.client.db.user(user_id=self.game.winner.id)
+            
+            GAME_END_EMBED.description = (
+                f"Game ended, the winner is {self.game.winner.name}\n"
+                f"## Win number {DB_USER['wins']}, Game number {DB_USER['games']}\n ### Win rate: {(DB_USER['wins']/DB_USER['games']) * 100}%"
+            )
+            GAME_END_EMBED.color = self.game.last_card.color_code
+            GAME_END_EMBED.set_thumbnail(url=self.game.last_card.image_url)
+            await self.thread.starter_message.delete()
+            await self.thread.parent.send(embed=GAME_END_EMBED)
+        await self.thread.delete()

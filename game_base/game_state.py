@@ -5,10 +5,10 @@ from dataclasses import dataclass
 @dataclass
 class GameConfig:
     client: discord.Client
-    thread: discord.TextChannel
+    thread: discord.Thread
     owner = None
     max_players: int = 8
-    min_players: int = 1
+    min_players: int = 2
 
 class GameState(Enum):
     WAITING = 1

@@ -1,23 +1,30 @@
 import discord
 import settings
-from games.uno.game import GameManager
+from games.uno.game import GameManager, UnoGameConfig
 from discord import app_commands
 logger = settings.logging.getLogger("game")
+
+boolean_options = [
+    app_commands.Choice(name="True", value=1),
+    app_commands.Choice(name="False", value=0)
+]
 
 @app_commands.command()
 @app_commands.guild_only()
 @app_commands.describe(randomize="Randomize player list at start?")
-@app_commands.choices(randomize=[
-    app_commands.Choice(name="True", value=1),
-    app_commands.Choice(name="False", value=0)
-])
+@app_commands.choices(randomize=boolean_options, stackable=boolean_options)
 @app_commands.checks.bot_has_permissions(manage_threads=True, send_messages_in_threads=True)
-async def uno(ctx: discord.Interaction, randomize: int = 0):
+async def uno(ctx: discord.Interaction, randomize: int = 0, stackable: int= 1):
     """Lose all your friends."""
     try:
+        configuration = UnoGameConfig(client=ctx.client, turn_time=180)
+
         await ctx.response.defer()
-        game_manager = GameManager(ctx)
-        start_menu = await game_manager.start_menu_func(ctx)
+        if randomize == 1: configuration.randomize_players = True
+        if stackable == 0: configuration.stackable = False
+
+        game_manager = GameManager(ctx=ctx, config=configuration)
+        await game_manager.start_game()
     except:
         print("An error occurred")
     finally:
