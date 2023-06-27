@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from game_base import *
 from .card_collection import UnoHand, UnoDeck
 from .card import UnoCard
-from .game_message_handler import GameDiscordInterface, HandButton
+from .game_message_handler import *
 
 logger = settings.logging.getLogger("game")
 
@@ -31,8 +31,9 @@ class UNOGame(GameBase):
         self.players: list[UnoPlayer] = []
         self.deck: UnoDeck = UnoDeck()
         self.graveyard: UnoDeck = UnoDeck()
-        self.winner: Player | None = None
+        self.winner: UnoPlayer | None = None
         self.last_action: str = "Game started with: "
+        self.last_player: UnoPlayer | None = None
         self.stack: int = 0
         self.message_handler: GameDiscordInterface = GameDiscordInterface(self)
 
@@ -56,7 +57,7 @@ class UNOGame(GameBase):
         self.players.append(UnoPlayer(user))
         return f"{user.display_name} joined the game succesfully."
 
-    async def start_game(self):
+    def start_game(self):
         if self.status != GameState.WAITING: return "Game already started..."
         if len(self.players) < self.data.min_players: return f"Minimum of players is {self.data.min_players}"
         if self.data.randomize_players: self.randomize_players()
@@ -72,12 +73,15 @@ class UNOGame(GameBase):
         self.graveyard.add_card(self.deck.pop_card())
 
         # change status
+        self.last_player = self.current_player
         self.status = GameState.PLAYING
         logger.info(f"UNO Game started in the guild: {self.thread.guild.id}")
         return "Game started succesfully!"
 
-    async def skip_turn(self):
+    def skip_turn(self):
         logger.info("Turn skipped")
+
+        self.last_player = self.current_player
 
         if self.is_clockwise:
             self.current_player_index = (self.current_player_index + 1) % len(self.players)
@@ -98,9 +102,9 @@ class UNOGame(GameBase):
         else:
             self.current_player.hand.add_multiple_cards(self.deck.pop_multiple_cards(3))
             self.current_player.warns += 1
-            if self.stack >= 1: await self.stack_resolve(skip=False)
+            if self.stack >= 1: await self.stack_resolve(force_skip=False)
             logger.info(f"User punished: {self.current_player.name} has {self.current_player.warns} warns")
-            await self.skip_turn()
+            self.skip_turn()
 
     def check_win(self):
         if len(self.current_player.hand.cards) == 0:
@@ -111,30 +115,30 @@ class UNOGame(GameBase):
     def change_orientation(self):
         self.is_clockwise = not self.is_clockwise
 
-    async def stack_resolve(self, skip: bool = True):
+    async def stack_resolve(self, force_skip: bool = True):
         self.current_player.hand.add_multiple_cards(self.deck.pop_multiple_cards(self.stack))
         self.stack = 0
-        if skip: await self.skip_turn()
+        if force_skip: self.skip_turn()
             
-    async def play_card(self, player: Player, card: int) -> UnoCard | None:
+    def play_card(self, player: Player, card_id: int, force_skip: bool = True) -> UnoCard | None:
         if player is not self.current_player: return None
-        card: UnoCard = player.hand.get_card_by_id(card)
-        if card == None: return print("ERROR: Card doesn't exist")
+        card: UnoCard = player.hand.get_card_by_id(card_id)
+        if card_id == None: return print("ERROR: Card doesn't exist")
 
-        print("Play card")
-
-        if card.has_effect or card.value == "+4":
-            await card.effect.execute(game=self)
+        if card.has_effect or card.value == "WILD+4":
+            card.effect.execute(game=self)
 
         # play process
         player.hand.del_card(card)
         self.last_action = f"{player.name} sent a card: "
         self.graveyard.add_card(card)
-        await self.skip_turn()
+        logger.info(f"{player.name} played a card: {card.name}")
+
+        if force_skip: self.skip_turn() 
 
         return card
     
-    async def draw_card(self, player: Player) -> UnoCard:
+    def draw_card(self, player: Player) -> UnoCard:
         card = self.deck.pop_card()
         player.hand.add_card(card)
         return card
@@ -182,16 +186,25 @@ class StartMenuView(discord.ui.View):
     @discord.ui.button(label="Start", custom_id="start")
     async def start_button(self, interaction: discord.Interaction, button):
         if interaction.user.id == self.game.players[0].id:
-            game_view = await self.game.message_handler.create_new_menu(HandButton(label="Hand"))
-            await self.game.start_game()
+            self.game.start_game()
+
+            FIRST_VIEW = await self.game.message_handler.create_new_menu(HandButton(label="Hand", custom_id="hand_button"))
+            GAME_START_EMBED.set_author(name="<< GAME STARTED >>")
+
+            await interaction.response.edit_message(embed=GAME_START_EMBED,view=None)
             await self.game.get_emojis()
-            await self.game.message_handler.send_status_message(view=game_view)
+            await self.game.message_handler.send_status_message(view=FIRST_VIEW)
             self.stop()
 
     @discord.ui.button(label="Join", custom_id="join", style=discord.ButtonStyle.green)
     async def join_button(self, interaction: discord.Interaction, button):
+        if interaction.user.id == self.game.players[0].id: return await interaction.response.send_message("Are you dumb?", ephemeral=True)
         await self.game.add_player(interaction.user)
-        await interaction.response.edit_message(content=self.game.player_list)
+        GAME_START_EMBED.description = (
+            "Join UNO and beat your friend's ass."
+            f"```md\n{self.game.player_list}```"
+        )
+        await interaction.response.edit_message(embed=GAME_START_EMBED)
 
 class GameManager:
     def __init__(self, ctx: discord.Interaction) -> None:
@@ -201,7 +214,13 @@ class GameManager:
         # add the owner player:
         await self.game.add_player(interaction.user)
 
+        # set embed player list
+        GAME_START_EMBED.description = (
+            "Join UNO and beat your friend's ass."
+            f"```md\n{self.game.player_list}```"
+        )
+
         # send the start menu
         start_menu_view: discord.ui.View = StartMenuView(timeout=60, game=self.game)
-        await interaction.edit_original_response(content=self.game.player_list, view=start_menu_view)
+        await interaction.edit_original_response(embed=GAME_START_EMBED, view=start_menu_view)
         await start_menu_view.wait()

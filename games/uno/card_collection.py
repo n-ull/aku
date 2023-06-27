@@ -38,7 +38,7 @@ class UnoHand(CardCollection):
     def emoji_hand(self, emoji_col: list[Emoji]):
         string = ""
         for card in self.cards:
-            emoji = next((e for e in emoji_col if e.name == f"{card.emoji_name}"), "Carta")
+            emoji = next((e for e in emoji_col if e.name == f"{card.emoji}"), "Carta")
             string += f"{emoji} "
         return string if len(string) > 2 else "Out of cards!"
 
