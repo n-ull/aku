@@ -271,4 +271,5 @@ class GameDiscordInterface:
             GAME_END_EMBED.set_thumbnail(url=self.game.last_card.image_url)
             await self.thread.starter_message.delete()
             await self.thread.parent.send(embed=GAME_END_EMBED)
+        del self.game.data.client.games[self.game.thread.guild.id]
         await self.thread.delete()
