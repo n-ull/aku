@@ -33,7 +33,7 @@ def run():
     #     if thread.guild.id in bot.games and thread.id == bot.games[thread.guild.id].game.thread.id:
     #         await bot.games[thread.guild.id].thread_deleted()
 
-    bot.run("MTEwNDI3MDA1NDc5MjYzODUyNQ.GRjpLl.bskU9j897gboWDNg1DU_cf3BHe4jnRrIZ0h8ds", root_logger=True)
-
+    bot.run(settings.DISCORD_API_TOKEN, root_logger=True)
+    
 if __name__ == "__main__":
     run()
