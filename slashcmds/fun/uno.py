@@ -11,10 +11,10 @@ boolean_options = [
 
 @app_commands.command()
 @app_commands.guild_only()
-@app_commands.describe(randomize="Randomize player list at start?")
+@app_commands.describe(randomize="Randomize player list at start?", stackable="Do you want to allow stack +2?",turn_time="How long is each turn? (in seconds)")
 @app_commands.choices(randomize=boolean_options, stackable=boolean_options)
 @app_commands.checks.bot_has_permissions(manage_threads=True, send_messages_in_threads=True)
-async def uno(ctx: discord.Interaction, randomize: int = 0, stackable: int= 1):
+async def uno(ctx: discord.Interaction, randomize: int = 0, stackable: int= 1, turn_time: int = 180):
     """Lose all your friends."""
     try:
         configuration = UnoGameConfig(client=ctx.client, turn_time=180)
@@ -22,6 +22,7 @@ async def uno(ctx: discord.Interaction, randomize: int = 0, stackable: int= 1):
         await ctx.response.defer()
         if randomize == 1: configuration.randomize_players = True
         if stackable == 0: configuration.stackable = False
+        configuration.turn_time = turn_time
 
         game_manager = GameManager(ctx=ctx, config=configuration)
         await game_manager.start_game()

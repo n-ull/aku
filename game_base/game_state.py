@@ -5,7 +5,7 @@ from dataclasses import dataclass
 @dataclass
 class GameConfig:
     client: discord.Client
-    thread: discord.Thread
+    thread: discord.Thread | None = None
     owner = None
     max_players: int = 8
     min_players: int = 2
