@@ -17,17 +17,27 @@ ___
 - Música
 - Muy mucho si muy
 
+Proximamente: 
+- [] Database
+	- [] Economía
+	- [] Leaderboard por Guild
+
 | Juegos | Disponibilidad |
 | --- | --- |
 | Economia | ❌
 | Blackjack | ✅
 | UNO! | ✅
+| Cards Against Humanity | 🔜
 | Batalla Naval | ❌
 | Ludo | ❌
 | Jackpot | ❌
 | Lotería | ❌
 | No Thanks! | ❌
-| PK Showdown | ❌
+| Poker | ❌
+| Truco (Juego Argentino) | ❌
+| Old Maid (Variante Japonesa) | ❌
+| Old Maid | ❌
+| PK Showdown Lookalike | ❌
 
 ## ¿Cómo instalarlo?
 1. Crear un archivo ".env" 
