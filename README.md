@@ -17,10 +17,10 @@ ___
 - Música
 - Muy mucho si muy
 
-Proximamente: 
-- [] Database
-	- [] Economía
-	- [] Leaderboard por Guild
+Proximamente:\
+⬜ Database\
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;⬜ Economía\
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;⬜ Leaderboard por Guild
 
 | Juegos | Disponibilidad |
 | --- | --- |
