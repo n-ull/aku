@@ -1,24 +1,15 @@
 from datetime import datetime
 import random
 import discord
-import settings
-from dataclasses import dataclass
+from game_base.player import Player
 
 # game imports
 from game_base import *
 from .card_collection import UnoHand, UnoDeck
 from .card import UnoCard
-from .game_message_handler import *
+from .game_message_handler import GameDiscordInterface, HandButton
 
-logger = settings.logging.getLogger("game")
-
-@dataclass
-class UnoGameConfig(GameConfig):
-    stackable: bool = True
-    effect_win: bool = True
-    randomize_players: bool = False
-    turn_time: float = 180
-
+# logger = settings.logging.get# logger("game")
 class UnoPlayer(Player):
     def __init__(self, user: discord.Member) -> None:
         super().__init__(user)
@@ -49,7 +40,7 @@ class UNOGame(GameBase):
         emoji_list.extend(a)
         emoji_list.extend(b)
         self.emoji_collection = emoji_list
-        logger.info("Emoji cards added to the game...")
+        # logger.info("Emoji cards added to the game...")
 
     async def add_player(self, user: Member) -> str:
         # check if can add
@@ -59,6 +50,15 @@ class UNOGame(GameBase):
 
         self.players.append(UnoPlayer(user))
         return f"{user.display_name} joined the game succesfully."
+    
+    async def del_player(self, player: Player):
+        if player not in self.players: return print("Player is not in this game...")
+        self.players.remove(player)
+
+        if len(self.players) <= 1:
+              self.status = GameState.CANCELLED
+              self.message_handler.last_view.stop() #TODO: Change this...
+              await self.message_handler.send_results()
 
     def start_game(self):
         if self.status != GameState.WAITING: return "Game already started..."
@@ -79,11 +79,11 @@ class UNOGame(GameBase):
         self.last_player = self.current_player
         self.status = GameState.PLAYING
         self.start_time = datetime.now()
-        logger.info(f"UNO Game started in the guild: {self.thread.guild.id}")
+        # logger.info(f"UNO Game started in the guild: {self.thread.guild.id}")
         return "Game started succesfully!"
 
     def skip_turn(self):
-        logger.info("Turn skipped")
+        # logger.info("Turn skipped")
 
         win = self.check_win()
         if win: return
@@ -98,20 +98,13 @@ class UNOGame(GameBase):
     async def punish_user(self):
         self.last_action = f"{self.current_player.name} lose his turn and eat 3 cards, last card is: " if self.stack == 0 else f"{self.current_player.name} lose his turn and eat 3 cards plus {self.stack} stacked cards, last card is: "
         if self.current_player.warns == 2:
-            logger.info(f"{self.current_player.name} recieved his last warn and got kicked out of the game.")
+            # logger.info(f"{self.current_player.name} recieved his last warn and got kicked out of the game.")
             self.del_player(self.current_player)
-
-            if len(self.players) <= 1:
-              self.status = GameState.CANCELLED
-              self.message_handler.last_view.stop()
-              await self.message_handler.send_results()
-              logger.info("Game cancelled due the lack of players.")
-              return
         else:
             self.current_player.hand.add_multiple_cards(self.deck.pop_multiple_cards(3))
             self.current_player.warns += 1
             if self.stack >= 1: await self.stack_resolve(force_skip=False)
-            logger.info(f"User punished: {self.current_player.name} has {self.current_player.warns} warns")
+            # logger.info(f"User punished: {self.current_player.name} has {self.current_player.warns} warns")
             self.skip_turn()
         new_view = await self.message_handler.create_new_menu(HandButton(label="Hand", custom_id="hand_button", style=discord.ButtonStyle.blurple))
         await self.message_handler.send_status_message(view=new_view)
@@ -121,7 +114,7 @@ class UNOGame(GameBase):
             self.status = GameState.FINISHED
             self.winner = self.current_player
             self.end_time = datetime.now()
-            logger.info(f"{self.current_player.name} won the game.")
+            # logger.info(f"{self.current_player.name} won the game.")
             return True
         else: return False
     
@@ -145,7 +138,7 @@ class UNOGame(GameBase):
         player.hand.del_card(card)
         self.last_action = f"{player.name} sent a card: "
         self.graveyard.add_card(card)
-        logger.info(f"{player.name} played a card: {card.name}")
+        # logger.info(f"{player.name} played a card: {card.name}")
 
         if force_skip: self.skip_turn() 
 
@@ -189,71 +182,6 @@ class UNOGame(GameBase):
     @property
     def last_card(self) -> Card:
         return self.graveyard.last_card
-
-class StartMenuView(discord.ui.View):
-    foo: bool | None = None
-
-    def __init__(self, *, timeout: float | None = 180, game):
-        super().__init__(timeout=timeout)
-        self.game : UNOGame = game
-
-    async def on_timeout(self):
-        print("Juego nunca comenzó, cancelado.")
-        # do the thing...
     
-    @discord.ui.button(label="Start", custom_id="start")
-    async def start_button(self, interaction: discord.Interaction, button):
-        if interaction.user.id == self.game.players[0].id:
-            self.game.start_game()
-
-            FIRST_VIEW = await self.game.message_handler.create_new_menu(HandButton(label="Hand", custom_id="hand_button", style=discord.ButtonStyle.blurple))
-
-            GAME_START_EMBED.set_author(name="<< GAME STARTED >>")
-            await interaction.response.edit_message(embed=GAME_START_EMBED,view=None)
-
-            await self.game.get_emojis()
-            await self.game.message_handler.send_status_message(view=FIRST_VIEW)
-            self.stop()
-
-    @discord.ui.button(label="Join", custom_id="join", style=discord.ButtonStyle.green)
-    async def join_button(self, interaction: discord.Interaction, button):
-        if interaction.user.id == self.game.players[0].id: return await interaction.response.send_message("Are you dumb?", ephemeral=True)
-        await self.game.add_player(interaction.user)
-        GAME_START_EMBED.description = (
-            "Join UNO and beat your friend's ass."
-            f"```md\n{self.game.player_list}```"
-        )
-        await interaction.response.edit_message(embed=GAME_START_EMBED)
-
-class GameManager:
-    def __init__(self, ctx: discord.Interaction, config: UnoGameConfig) -> None:
-        self.ctx = ctx
-        self.game: UNOGame | None = None
-        self.config = config
-
-    async def start_game(self):
-        thread: discord.Thread = await self.make_thread(self.ctx)
-        self.config.thread = thread
-        self.game = UNOGame(data=self.config)
-        self.ctx.client.games[self.ctx.guild_id] = self.game
-        await self.start_menu_func()
-
-    async def make_thread(self, ctx: discord.Interaction) -> discord.Thread:
-        await ctx.edit_original_response(content="Play UNO inside the thread!")
-        response = await ctx.original_response()
-        return await response.create_thread(name="<< UNO GAME >>")
-
-    async def start_menu_func(self):
-        # add the owner player:
-        await self.game.add_player(self.ctx.user)
-
-        # set embed player list
-        GAME_START_EMBED.description = (
-            "Join UNO and beat your friend's ass."
-            f"```md\n{self.game.player_list}```"
-        )
-
-        # send the start menu
-        start_menu_view: discord.ui.View = StartMenuView(timeout=60, game=self.game)
-        await self.ctx.edit_original_response(embed=GAME_START_EMBED, view=start_menu_view)
-        await start_menu_view.wait()
+    def __str__(self) -> str:
+        return f"UNO > {self.thread.guild.name}"

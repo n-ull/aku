@@ -12,7 +12,7 @@ class GameBase:
         self.thread: TextChannel = data.thread #TODO: Change to Thread
         self.status: GameState = GameState.WAITING
 
-    def add_player(self, user: Member):
+    async def add_player(self, user: Member):
         # check if can add
         if self.status == GameState.PLAYING: return
         if user.id in [p.id for p in self.players]: return f"You are already in the game..."
@@ -21,9 +21,12 @@ class GameBase:
         self.players.append(Player(user))
         return f"{user.display_name} joined the game succesfully."
 
-    def del_player(self, player: Player):
-        if player not in self.players: return print("Game already started...")
+    async def del_player(self, player: Player):
+        if player not in self.players: return print("Player is not in this game...")
         self.players.remove(player)
+
+        if len(self.players) <= 1:
+              self.status = GameState.CANCELLED
     
     def start_game(self): ...
 
