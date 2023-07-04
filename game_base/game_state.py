@@ -6,8 +6,9 @@ import discord
 
 @dataclass
 class GameConfig:
-    owner: discord.Member
-    ctx: discord.Client
+    client: discord.Client
+    thread: discord.Thread | None = None
+    owner: discord.Member | None = None
     max_players: int = 8
     min_players: int = 2
 

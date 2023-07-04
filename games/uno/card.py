@@ -20,7 +20,7 @@ class UnoCard(Card):
         return self.color == card.color or self.value == card.value or self.is_wild
 
     def get_one_emoji(self, emoji_collection: list[discord.Emoji]) -> discord.Emoji:
-        emoji = next((e for e in emoji_collection if e.name == self.emoji_name))
+        emoji = next((e for e in emoji_collection if e.name == self.emoji))
         return emoji
 
     @property
@@ -43,7 +43,7 @@ class UnoCard(Card):
         return effects.get(self.value, False)
 
     @property
-    def emoji_name(self):
+    def emoji(self):
         effects: dict = {"+2": "PLUS2", "WILD+4": "PLUS4"}
 
         if self.value == "WILD":

@@ -13,6 +13,8 @@ async def gay(ctx: Interaction, user: discord.Member | None):
     if user is None:
         user = ctx.user
 
+    await ctx.response.send_message("Calculating...")
+
     progress_bar = ProgressBar(length=14, filled_emoji="🏳️‍🌈")
     gay_level: int = calculate_image_hash_from_url(user.avatar) % 100
 
@@ -25,7 +27,7 @@ async def gay(ctx: Interaction, user: discord.Member | None):
     if gay_level == 0:
         embed.set_image(url="https://i.pinimg.com/originals/7f/2e/19/7f2e190365fde21a51610bf8c905fc9c.jpg")
 
-    await ctx.response.send_message(embed=embed)
+    await ctx.edit_original_response(embed=embed, content=None)
 
 
 async def setup(bot):

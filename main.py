@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 
 import settings
-from utils.database import AkuDatabase
 
 logger = settings.logging.getLogger("bot")
 
@@ -13,22 +12,14 @@ def run():
 
     bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
     bot.games: dict = dict()
-    bot.db = AkuDatabase(settings.MONGO_URI)
-
-    # TODO: No funciona
-    @bot.tree.error
-    async def on_app_command_error(interaction: discord.Interaction, error):
-        if isinstance(error, commands.BotMissingPermissions):
-            await interaction.response.send_message(content=error, ephemeral=True)
-        else:
-            raise error
 
     @bot.event
     async def on_ready():
         logger.info(f"User: {bot.user} (ID: {bot.user.id})")
 
         await bot.load_extension("cogs.debugger")
-        await bot.change_presence(activity=discord.Game(name="Python Version"))
+        await bot.load_extension("cogs.game_manager")
+        await bot.change_presence(activity=discord.Game(name="BURUBAGA!"))
 
         for slashcmd_file in settings.SCMD_DIR.rglob("*.py"):
             group = slashcmd_file.parent.name

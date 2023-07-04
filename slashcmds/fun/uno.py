@@ -1,47 +1,46 @@
 import discord
 from discord import app_commands
 
-import settings
-from games.uno.game import Main
+import games.uno.game_config as UNO
+import utils.game_utils as game_utils
 
-logger = settings.logging.getLogger("game")
+boolean_options = [app_commands.Choice(name="True", value=1), app_commands.Choice(name="False", value=0)]
+
+time_options = [
+    app_commands.Choice(name="1 minute", value=60),
+    app_commands.Choice(name="2 minutes", value=120),
+    app_commands.Choice(name="3 minutes", value=180),
+]
 
 
 @app_commands.command()
 @app_commands.guild_only()
-@app_commands.describe(randomize="Randomize player list at start?")
-@app_commands.choices(randomize=[app_commands.Choice(name="True", value=1), app_commands.Choice(name="False", value=0)])
+@app_commands.describe(
+    randomize="Randomize player list at start?",
+    stackable="Do you want to allow stack +2?",
+    turn_time="How long is each turn?",
+)
+@app_commands.choices(randomize=boolean_options, stackable=boolean_options, turn_time=time_options)
 @app_commands.checks.bot_has_permissions(manage_threads=True, send_messages_in_threads=True)
-async def uno(ctx: discord.Interaction, randomize: int = 0):
+async def uno(ctx: discord.Interaction, randomize: int = 0, stackable: int = 1, turn_time: int = 180):
     """Lose all your friends."""
-    try:
-        if ctx.guild_id in ctx.client.games:
-            return await ctx.response.send_message("Can't open another game in the same guild.")
-        main = Main(ctx=ctx, randomize=randomize == 0)
-        await main.start()
-    except Exception as e:
-        logger.exception(f"UNO: AN EXCEPTION OCCURRED: {e}")
-    finally:
-        result_embed: discord.Embed = discord.Embed(title=f"UNO! {ctx.user.display_name} finished:")
-        if main.game.status.name != "FINISHED":
-            result_embed.description = "Game has been cancelled."
-            await ctx.channel.send(embed=result_embed)
-        else:
-            for player in main.game.players:
-                await ctx.client.db.add_uno_game(player.id)
+    if ctx.channel.type.name != "text":
+        return await ctx.response.send_message("You can't use this command here!", ephemeral=True)
+    GAME_MANAGER = game_utils.GameManager(ctx.client)
+    GUILD_DICT = GAME_MANAGER.get_guild_dictionary(guild_id=ctx.guild_id)
+    EXISTING_GAME = GAME_MANAGER.check_game_instance(guild_dict=GUILD_DICT, game_type=game_utils.GameType.UNO)
 
-            await ctx.client.db.add_uno_win(main.game.winner.id)
-            user_db = await ctx.client.db.uno_wins(main.game.winner.id)
-
-            result_embed.description = (
-                f"The winner is: {main.game.winner.name}\n"
-                f"{main.game.winner.name} won a total of {user_db['wins']} games.\n"
-                f"Win rate: {(user_db['wins'] / user_db['games']) * 100}%"
-            )
-            result_embed.color = main.game.graveyard.last_card.color_code
-            result_embed.set_thumbnail(url=main.game.graveyard.last_card.image_url)
-            await ctx.channel.send(embed=result_embed)
-        del ctx.client.games[ctx.guild_id]
+    if GUILD_DICT is not None:
+        if GAME_MANAGER.check_game_instance(guild_dict=GUILD_DICT, game_type=game_utils.GameType.UNO):
+            await ctx.response.send_message("Someone is already playing UNO in this guild.")
+    elif not EXISTING_GAME or EXISTING_GAME is None:
+        await ctx.response.defer()
+        bool = [False, True]
+        configuration = UNO.UnoGameConfig(
+            client=ctx.client, stackable=bool[stackable], randomize_players=bool[randomize], turn_time=turn_time
+        )
+        await GAME_MANAGER.start_game(ctx=ctx, game=game_utils.GameType.UNO, configuration=configuration)
+        await ctx.edit_original_response(content="Game Started...")
 
 
 async def setup(bot):

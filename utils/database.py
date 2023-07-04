@@ -1,19 +1,34 @@
 from pymongo import MongoClient
 
-# import os
-# MONGO_URI = "mongodb+srv://akuowner:VbXxlg1br3dCa9yQ@akucluster.c2cirfo.mongodb.net/?retryWrites=true&w=majority"
+import settings
 
 
-class AkuDatabase:
-    def __init__(self, uri) -> None:
-        self.client = MongoClient(uri)
-        self.user_collection = self.client["aku_bot"]["users"]
+class DBHandler:
+    def __init__(self, db_name, collection_name):
+        self.db_name = db_name
+        self.collection_name = collection_name
+        self.client = None
+        self.db = None
+        self.collection = None
 
-    async def add_uno_win(self, user_id: int):
-        self.user_collection.find_one_and_update({"id": user_id}, {"$inc": {"wins": 1}}, upsert=True)
+    def connect(self):
+        self.client = MongoClient(settings.MONGO_URI)
+        self.db = self.client[self.db_name]
+        self.collection = self.db[self.collection_name]
 
-    async def add_uno_game(self, user_id: int):
-        self.user_collection.find_one_and_update({"id": user_id}, {"$inc": {"games": 1}}, upsert=True)
+    def disconnect(self):
+        if self.client:
+            self.client.close()
 
-    async def uno_wins(self, user_id: int):
-        return self.user_collection.find_one({"id": user_id})
+    def increment_wins(self, user_id):
+        self.collection.update_one({"user_id": user_id}, {"$inc": {"wins": 1}}, upsert=True)
+
+    def increment_games(self, user_id):
+        self.collection.update_one({"user_id": user_id}, {"$inc": {"games": 1}}, upsert=True)
+
+    def get_stats(self, user_id):
+        user_stats = self.collection.find_one({"user_id": user_id}, {"_id": 0, "wins": 1, "games": 1})
+        if user_stats:
+            return user_stats.get("wins", 0), user_stats.get("games", 0)
+        else:
+            return None
