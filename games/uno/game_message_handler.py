@@ -12,7 +12,7 @@ import utils.game_utils
 class WildColorSelector(discord.ui.View):
     foo: bool = False
 
-    def __init__(self, *, timeout: float | None = 60, card):
+    def __init__(self, *, timeout: float | None = None, card):
         super().__init__(timeout=timeout)
         self.card = card
 
@@ -152,6 +152,9 @@ class TurnOptionsView(discord.ui.View):
         else:
             valid_hand = self.game.current_player.hand.generate_valid_hand(self.game.last_card)
 
+        if len(self.game.current_player.hand.cards) == 1 and self.game.current_player.hand.last_card.is_wild:
+            valid_hand = []
+
         # if valid hand has items, make the select menu and append
         if len(valid_hand) > 0:
             card_selector: CardSelector = CardSelector(custom_id="send_card", options=[])
@@ -209,7 +212,7 @@ class PlayerTurnView(discord.ui.View):
                     if self.TURN_VIEW.children_view is not None: self.TURN_VIEW.children_view.stop()
                 await self.game.punish_user()
 
-    def __init__(self, *, timeout: float | None = 180, game: GameBase):
+    def __init__(self, *, timeout: float | None = None, game: GameBase):
         super().__init__(timeout=timeout)
         self.game = game
         self.opened: bool = False # this will remember if the player used the button inside the view.
@@ -288,7 +291,8 @@ class GameDiscordInterface:
 
 
     async def create_new_menu(self, *buttons: Tuple[discord.ui.Button, ...]) -> PlayerTurnView:
-        player_turn_menu = PlayerTurnView(timeout=self.game.data.turn_time, game=self.game)
+        # player_turn_menu = PlayerTurnView(timeout=self.game.data.turn_time, game=self.game)
+        player_turn_menu = PlayerTurnView(timeout=None, game=self.game)
         for button in buttons:
             player_turn_menu.add_item(button)
         return player_turn_menu
