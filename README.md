@@ -1,6 +1,5 @@
 # Aku Aku Bot
-<img src="https://img.shields.io/badge/Outlaw's Fortress-purple"> <img src="https://img.shields.io/badge/Yoru--blue">\
-Bot multipropósito enfocado en ofrecer mini-juegos para la comunidad. **Proyecto creado para Outlaw's Fortress.**
+Bot multipropósito enfocado en ofrecer mini-juegos para la comunidad. 
 
 > Puedes clonar este proyecto y usarlo para tus servidores, o agregar al [bot oficial](https://discord.com/api/oauth2/authorize?client_id=1104270054792638525&permissions=51539607552&scope=applications.commands%20bot):
 
@@ -15,7 +14,6 @@ ___
 - Economía
 - Scoreboard para cada juego
 - Música
-- Muy mucho si muy
 
 Proximamente:\
 ⬜ Database\
