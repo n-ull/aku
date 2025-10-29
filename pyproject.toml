@@ -9,10 +9,11 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 discord = "^2.3.0"
-python-dotenv = "^1.0.0"
+envsqare = {url = "https://gitlab.com/square-wheel-team/envsqare/-/archive/prerelease-0.0.4/envsqare-prerelease-0.0.4.tar.gz"}
 requests = "^2.31.0"
 pillow = "^9.5.0"
 imagehash = "^4.3.1"
+pymongo = "^4.4.0"
 
 
 [build-system]
